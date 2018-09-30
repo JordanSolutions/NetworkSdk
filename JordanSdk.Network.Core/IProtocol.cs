@@ -9,7 +9,7 @@ namespace JordanSdk.Network.Core
     /// The IProtocol interface that simplifies networking connection management for both server and client connections through an easy to use, yet powerful contract. 
     /// This interface allows for 2 different asynchronous models for flexibility, standard awaitable Task as well as callback mechanisms that will fire once the operation completes, at the same time it exposes the same functions for synchronous operations.
     /// </summary>
-    /// <typeparam name="T"></typeparam>
+    /// <typeparam name="T">ISocket implementation.</typeparam>
     public interface IProtocol<T> where T : ISocket
     {
         /// <summary>

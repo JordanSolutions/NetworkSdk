@@ -15,7 +15,7 @@ namespace JordanSdk.Network.Core
     {
 
         #region Private Fields
-        MemoryStream buffer;
+        private MemoryStream buffer;
         private int size;
         private int received;
         private object locker = new object();
@@ -24,7 +24,7 @@ namespace JordanSdk.Network.Core
         #region Constructor
 
         /// <summary>
-        /// Buffer constructor that allows you to specify the size only.
+        /// Initializes an empty buffer.
         /// </summary>
         /// <param name="size"></param>
         public NetworkBuffer(int size)
@@ -36,6 +36,11 @@ namespace JordanSdk.Network.Core
             buffer = size > 0 ? new MemoryStream(size) : new MemoryStream();
         }
 
+        /// <summary>
+        /// Initializes a buffer and copies the array provided.
+        /// </summary>
+        /// <param name="size"></param>
+        /// <param name="initialData"></param>
         public NetworkBuffer(int size, byte[] initialData)
         {
             if (size <= 0)
@@ -52,6 +57,10 @@ namespace JordanSdk.Network.Core
 
         }
 
+        /// <summary>
+        /// Initializes the buffer copying all data from the provided instance.
+        /// </summary>
+        /// <param name="instance"></param>
         public NetworkBuffer(INetworkBuffer instance)
         {
             this.size = instance.Size;
@@ -60,10 +69,12 @@ namespace JordanSdk.Network.Core
         }
 
         #endregion
-            /// <summary>
-            /// Size of the buffer in bytes.
-            /// </summary>
+
+        /// <summary>
+        /// Size of the buffer in bytes.
+        /// </summary>
         public int Size { get { return size; } }
+
         /// <summary>
         ///Represents the amount of bytes already copied into buffer.
         /// </summary>
@@ -99,7 +110,7 @@ namespace JordanSdk.Network.Core
         /// <param name="data">Array to copy into buffer.</param>
         /// <param name="position">Element position in data to start copying from.</param>
         /// <param name="size">Optional size of the elements to copy from data.</param>
-        public void AppendConstrained(byte[] data, uint sourcePosition = 0, uint? sourceSize = null)
+        public void AppendConstrained(byte[] data, uint position = 0, uint? size = null)
         {
             if (disposedValue)
                 throw new ObjectDisposedException("This buffer has been disposed.");
@@ -108,19 +119,19 @@ namespace JordanSdk.Network.Core
             {
                 if (data == null || data.Length == 0)
                     throw new ArgumentNullException("data", "Data can not be null or zero length.");
-                if (!sourceSize.HasValue)
-                    sourceSize = (uint)data.Length - sourcePosition;
-                if (received + sourceSize > size)
+                if (!size.HasValue)
+                    size = (uint)data.Length - position;
+                if (received + size > this.size)
                     throw new ArgumentOutOfRangeException("data", "Buffer overflow, the amount of data to be copied is larger than buffer size.");
-                buffer.Write(data, (int)sourcePosition, (int)sourceSize.Value);
-                received += (int)sourceSize.Value;
+                buffer.Write(data, (int)position, (int)size.Value);
+                received += (int)size.Value;
             }
         }
 
         /// <summary>
         /// returns an array containing received bytes.
         /// </summary>
-        /// <returns></returns>
+        /// <returns>Returns a copy of the buffer array.</returns>
         public byte[] GetBuffer()
         {
             if (disposedValue)
@@ -135,10 +146,10 @@ namespace JordanSdk.Network.Core
         }
 
         /// <summary>
-        /// Reads from buffer the number of bytes specified by length, starting from buffer current position. When length exceeds the amount of bytes remaining to be read, the returned array will contain only the remaining bytes.
+        /// Reads from buffer the number of bytes specified by length, starting from buffer current position. Returned array size will be constrained to the remaining bytes to be read, when length exceeds the size of remaining bytes.
         /// </summary>
         /// <param name="length">Maximum number of bytes to read from buffer.</param>
-        /// <returns></returns>
+        /// <returns>Returns an array with data from buffer and size not larger than length. Array size will be constrained to the amount of bytes remaining to be read, or length.</returns>
         public byte[] Read(int length)
         {
             if (disposedValue)
@@ -150,8 +161,7 @@ namespace JordanSdk.Network.Core
                     throw new Exception("Not all bytes has been written into buffer, until this occurs reading or modifying the position of the buffer is not allowed. If your intentions are not to continue writing to buffer, resize the buffer to the same size or less than Received Property( Buffer.Resize(Buffer.Received)).");
                 if (buffer.Position >= received)
                     return null;
-                int readSize = received < length ? received : buffer.Position + length < received ? length : received - (int)buffer.Position;
-                var _result = new byte[readSize];
+                var _result = new byte[received < length ? received : buffer.Position + length < received ? length : received - (int)buffer.Position];
                 buffer.Read(_result, 0, _result.Length);
                 return _result;
             }

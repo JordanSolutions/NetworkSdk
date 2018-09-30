@@ -26,7 +26,6 @@ namespace JordanSdk.Network.Core
         /// <summary>
         /// When overwritten in a derived class, initiates an awaitable asynchronous network read.
         /// </summary>
-        /// <param name="token">Task cancellation token.</param>
         /// <returns>Returns an INetworkBuffer object with data received.</returns>
         Task<INetworkBuffer> ReceiveAsync();
 
@@ -46,6 +45,7 @@ namespace JordanSdk.Network.Core
         /// <summary>
         /// When overwritten in a derived class, writes data to the network and calls callback once the write operation concludes.
         /// </summary>
+        /// <param name="data">INetworkBuffer containing the data to be sent.</param>
         /// <param name="callback">Callback invoked once the write operation concludes.</param>
         void SendAsync(INetworkBuffer data, Action<int> callback);
 
@@ -53,7 +53,7 @@ namespace JordanSdk.Network.Core
         /// When overwritten in a derived class, blocks until all data in buffer is sent.
         /// </summary>
         /// <param name="data">Data to be written to the network.</param>
-        /// <returns>Returns the amount of bytes writen.</returns>
+        /// <returns>Returns the amount of bytes written.</returns>
         int Send(INetworkBuffer data);
 
         /// <summary>
@@ -65,6 +65,7 @@ namespace JordanSdk.Network.Core
         /// <summary>
         /// When overwritten in a derived class, this awaitable function disconnects the socket connection.
         /// </summary>
+        /// <param name="callback">Callback invoked when the socket is disconnected.</param>
         /// <returns>An awaitable class.</returns>
         void DisconnectAsync(Action callback);
 

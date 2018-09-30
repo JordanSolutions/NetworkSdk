@@ -5,6 +5,9 @@ using System.Text;
 
 namespace JordanSdk.Network.Core
 {
+    /// <summary>
+    /// Buffer that contains data to be written, or read from the network stream.
+    /// </summary>
     public interface INetworkBuffer
     {
         /// <summary>
@@ -49,7 +52,7 @@ namespace JordanSdk.Network.Core
         /// <param name="data">Array to copy into buffer.</param>
         /// <param name="position">Element position in data to start copying from.</param>
         /// <param name="size">Optional size of the elements to copy from data.</param>
-        void AppendConstrained(byte[] data, uint sourcePosition, uint? sourceSize);
+        void AppendConstrained(byte[] data, uint position, uint? size);
 
         /// <summary>
         /// When overwritten in a derived class, resizes the buffer. If new size is less than original size, the buffer will be truncated and an array copy operation will take place degrading performance. When new size is larger than original, the buffer is extended without requiring bytes to be transfered to a new array.
@@ -57,6 +60,10 @@ namespace JordanSdk.Network.Core
         /// <param name="newSize">New buffer size.</param>
         void Resize(int newSize);
 
+        /// <summary>
+        /// When implemented in a derived class, provides access to creating a duplicate of the network buffer.
+        /// </summary>
+        /// <returns>Returns a network buffer containing a copy of the original.</returns>
         INetworkBuffer Clone();
     }
 }
