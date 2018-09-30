@@ -19,7 +19,9 @@ namespace JordanSdk.Network.TCP
         #endregion
 
         #region Events
-
+        /// <summary>
+        /// Event invoked when the connection is lost or purposely closed.
+        /// </summary>
         public event DisconnectedDelegate OnSocketDisconnected;
 
         #endregion
