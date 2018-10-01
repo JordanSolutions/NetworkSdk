@@ -2,14 +2,17 @@
 using System.Threading.Tasks;
 using System.Net.Sockets;
 using JordanSdk.Network.Core;
+using System.Net;
 
-namespace JordanSdk.Network.Tcp
+namespace JordanSdk.Network.Udp
 {
-    public class TcpSocket : ISocket
+    public class UdpSocket : ISocket
     {
         #region Private Fields
         Socket socket;
+        EndPoint endPoint;
         string token;
+        bool connected = false;
         #endregion
 
         #region Events
@@ -22,7 +25,7 @@ namespace JordanSdk.Network.Tcp
 
         #region Public Properties
 
-        public bool Connected { get { return socket?.Connected ?? false; } }
+        public bool Connected { get { return connected; } internal set { connected = value; } }
 
         public string Token { get { return token; } }
 
@@ -30,12 +33,15 @@ namespace JordanSdk.Network.Tcp
 
         #region Constructor
 
-        internal TcpSocket(Socket socket, string token)
+        internal UdpSocket(Socket socket, IPEndPoint endPoint, string token)
         {
             if (socket == null)
                 throw new ArgumentNullException("socket", "Socket can not be null.");
+            else if (endPoint == null)
+                throw new ArgumentNullException("endPoint", "Client endpoint can not be null.");
             this.socket = socket;
             this.token = token;
+            this.endPoint = endPoint;
         }
 
 
@@ -48,9 +54,10 @@ namespace JordanSdk.Network.Tcp
 
         public void Disconnect()
         {
+
             socket.Shutdown(SocketShutdown.Both);
-            socket.Disconnect(false);
             socket.Close();
+            Connected = false;
             OnSocketDisconnected?.Invoke(this);
         }
 
@@ -65,9 +72,11 @@ namespace JordanSdk.Network.Tcp
                 {
                     socket.EndDisconnect(e);
                     socket.Close();
+                    Connected = false;
                     task.TrySetResult(true);
                 }
-                catch (Exception ex) {
+                catch (Exception ex)
+                {
                     task.SetException(ex);
                 }
                 finally
@@ -87,6 +96,7 @@ namespace JordanSdk.Network.Tcp
                 {
                     socket.EndDisconnect(e);
                     socket.Close();
+                    Connected = false;
                     callback?.Invoke();
                 }
                 catch (Exception ex)
@@ -107,13 +117,13 @@ namespace JordanSdk.Network.Tcp
         public int Send(INetworkBuffer data)
         {
             int bytesSent = 0;
-            var clone = data.Size > TcpProtocol.BUFFER_SIZE ? data.Clone() : data;
+            var clone = data.Size > UdpProtocol.BUFFER_SIZE ? data.Clone() : data;
             clone.ResetPosition();
-            byte[] _data = clone.Read(TcpProtocol.BUFFER_SIZE);
+            byte[] _data = clone.Read(UdpProtocol.BUFFER_SIZE);
             while (_data != null)
             {
-                bytesSent += socket.Send(_data);
-                _data = clone.Read(TcpProtocol.BUFFER_SIZE);
+                bytesSent += socket.SendTo(_data, endPoint);
+                _data = clone.Read(UdpProtocol.BUFFER_SIZE);
             }
             return bytesSent;
         }
@@ -122,20 +132,20 @@ namespace JordanSdk.Network.Tcp
         {
             TaskCompletionSource<int> task = new TaskCompletionSource<int>();
             //Need to create an immutable copy if the total count of bytes is greater than buffer size.
-            var clone = data.Size > TcpProtocol.BUFFER_SIZE ? data.Clone() : data;
+            var clone = data.Size > UdpProtocol.BUFFER_SIZE ? data.Clone() : data;
             clone.ResetPosition();
-            byte[]  _data = clone.Read(TcpProtocol.BUFFER_SIZE);
-            var iresult = socket.BeginSend(_data, 0, _data.Length, 0, SendCallback, new AsyncTripletState<Socket, INetworkBuffer, int>() { State = socket, Data = clone, Complement = 0, CallBack = task });
+            byte[] _data = clone.Read(UdpProtocol.BUFFER_SIZE);
+            var iresult = socket.BeginSendTo(_data, 0, _data.Length, 0,endPoint, SendCallback, new AsyncTripletState<Socket, INetworkBuffer, int>() { State = socket, Data = clone, Complement = 0, CallBack = task });
             return await task.Task;
         }
 
         public void SendAsync(INetworkBuffer data, Action<int> callback)
         {
             //Need to create an immutable copy if the total count of bytes is greater than buffer size.
-            var clone = data.Size > TcpProtocol.BUFFER_SIZE ? data.Clone() : data;
+            var clone = data.Size > UdpProtocol.BUFFER_SIZE ? data.Clone() : data;
             clone.ResetPosition();
-            byte[] _data = clone.Read(TcpProtocol.BUFFER_SIZE);
-            socket.BeginSend(_data, 0, _data.Length, 0, SendCallback, new AsyncTripletState<Socket, INetworkBuffer, int>() { State = socket, Data = clone, Complement = 0, CallBack = callback });
+            byte[] _data = clone.Read(UdpProtocol.BUFFER_SIZE);
+            socket.BeginSendTo(_data, 0, _data.Length, 0,endPoint, SendCallback, new AsyncTripletState<Socket, INetworkBuffer, int>() { State = socket, Data = clone, Complement = 0, CallBack = callback });
         }
 
         #endregion
@@ -144,22 +154,23 @@ namespace JordanSdk.Network.Tcp
 
         public void ReceiveAsync(Action<INetworkBuffer> callback)
         {
-            byte[] buffer = new byte[TcpProtocol.BUFFER_SIZE];
-            socket.BeginReceive(buffer, 0, TcpProtocol.BUFFER_SIZE, 0, ReceiveCallback, new AsyncTupleState<Socket, byte[]>() { State = socket, Data = buffer, CallBack = callback });
+            byte[] buffer = new byte[UdpProtocol.BUFFER_SIZE];
+            socket.BeginReceiveFrom(buffer, 0, UdpProtocol.BUFFER_SIZE, 0, ref endPoint, ReceiveCallback, new AsyncTupleState<Socket, byte[]>() { State = socket, Data = buffer, CallBack = callback });
         }
 
         public async Task<INetworkBuffer> ReceiveAsync()
         {
-            byte[] buffer = new byte[TcpProtocol.BUFFER_SIZE];
+            byte[] buffer = new byte[UdpProtocol.BUFFER_SIZE];
             var task = new TaskCompletionSource<INetworkBuffer>();
-            socket.BeginReceive(buffer, 0, TcpProtocol.BUFFER_SIZE, 0, ReceiveCallback, new AsyncTupleState<Socket, byte[]>() { State = socket, Data = buffer, CallBack = task });
+            socket.BeginReceiveFrom(buffer, 0, UdpProtocol.BUFFER_SIZE, 0, ref endPoint, ReceiveCallback, new AsyncTupleState<Socket, byte[]>() { State = socket, Data = buffer, CallBack = task });
             return await task.Task;
         }
 
         public INetworkBuffer Receive()
         {
-            byte[] buffer = new byte[TcpProtocol.BUFFER_SIZE];
-            int size = socket.Receive(buffer, 0, TcpProtocol.BUFFER_SIZE, 0);
+            byte[] buffer = new byte[UdpProtocol.BUFFER_SIZE];
+
+            int size = socket.ReceiveFrom(buffer, 0, UdpProtocol.BUFFER_SIZE, 0, ref endPoint);
             NetworkBuffer result = new NetworkBuffer(size);
             if (size > 0)
                 result.AppendConstrained(buffer, 0, (uint)size);
@@ -172,21 +183,21 @@ namespace JordanSdk.Network.Tcp
 
         #region Private Functions
 
-        private static void ReceiveCallback(IAsyncResult ar)
+        private void ReceiveCallback(IAsyncResult ar)
         {
             AsyncTupleState<Socket, byte[]> state = ar.AsyncState as AsyncTupleState<Socket, byte[]>;
             try
             {
-                int size = state.State.EndReceive(ar);
-            NetworkBuffer result = new NetworkBuffer(size);
-            if (size > 0)
-                result.AppendConstrained(state.Data, 0, (uint)size);
+                int size = state.State.EndReceiveFrom(ar,ref endPoint);
+                NetworkBuffer result = new NetworkBuffer(size);
+                if (size > 0)
+                    result.AppendConstrained(state.Data, 0, (uint)size);
 
-            if (state.CallBack != null && state.CallBack is Action<INetworkBuffer>)
-                (state.CallBack as Action<INetworkBuffer>).Invoke(result);
-            else if (state.CallBack != null & state.CallBack is TaskCompletionSource<INetworkBuffer>)
-                (state.CallBack as TaskCompletionSource<INetworkBuffer>).SetResult(result);
-             }
+                if (state.CallBack != null && state.CallBack is Action<INetworkBuffer>)
+                    (state.CallBack as Action<INetworkBuffer>).Invoke(result);
+                else if (state.CallBack != null & state.CallBack is TaskCompletionSource<INetworkBuffer>)
+                    (state.CallBack as TaskCompletionSource<INetworkBuffer>).SetResult(result);
+            }
             catch (Exception ex)
             {
                 if (state.CallBack != null && state.CallBack is TaskCompletionSource<int>)
@@ -196,15 +207,15 @@ namespace JordanSdk.Network.Tcp
             }
         }
 
-        private static void SendCallback(IAsyncResult ar)
+        private void SendCallback(IAsyncResult ar)
         {
             AsyncTripletState<Socket, INetworkBuffer, int> state = ar.AsyncState as AsyncTripletState<Socket, INetworkBuffer, int>;
             try
             {
-                int sent = state.State.EndSend(ar);
+                int sent = state.State.EndSendTo(ar);
                 if (sent > 0)
                     state.Complement += sent;
-                var remaining = state.Data.Read(TcpProtocol.BUFFER_SIZE);
+                var remaining = state.Data.Read(UdpProtocol.BUFFER_SIZE);
 
                 if (remaining == null)
                 {

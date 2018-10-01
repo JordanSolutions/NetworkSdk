@@ -1,5 +1,5 @@
 ﻿using Microsoft.VisualStudio.TestTools.UnitTesting;
-using JordanSdk.Network.TCP;
+using JordanSdk.Network.Udp;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -8,20 +8,20 @@ using System.Threading.Tasks;
 using System.Net.Sockets;
 using JordanSdk.Network.Core;
 
-namespace JordanSdk.Network.TCP.Tests
+namespace JordanSdk.Network.Udp.Tests
 {
     [TestClass()]
-    public class TCPSocketTests
+    public class UdpSocketTests
     {
         #region Fields
         static byte[] BIG_BUFFER_DATA;
         static byte[] HUGE_BUFFER_DATA;
 
         System.Threading.ManualResetEvent mevent;
-        static TCPProtocol ipv4Server;
-        static TCPProtocol ipv6Server;
-        static TCPSocket ipv4Client;
-        static TCPSocket ipv6Client;
+        static UdpProtocol ipv4Server;
+        static UdpProtocol ipv6Server;
+        static UdpSocket ipv4Client;
+        static UdpSocket ipv6Client;
 
         #endregion
 
@@ -45,11 +45,11 @@ namespace JordanSdk.Network.TCP.Tests
         [ClassInitialize]
         public static void ClassInitialized(TestContext context)
         {
-            ipv4Server = new TCPProtocol();
+            ipv4Server = new UdpProtocol();
             ipv4Server.Port = 4884;
             ipv4Server.IPAddressKind = IPAddressKind.IPV4;
             ipv4Server.Listen();
-            ipv6Server = new TCPProtocol();
+            ipv6Server = new UdpProtocol();
             ipv6Server.Port = 4884;
             ipv6Server.IPAddressKind = IPAddressKind.IPV6;
             ipv6Server.Listen();
@@ -76,7 +76,7 @@ namespace JordanSdk.Network.TCP.Tests
 
         #region Test Cases
 
-        [TestMethod(), TestCategory("TCPSocket (Send)")]
+        [TestMethod(), TestCategory("UdpSocket (Send)")]
         public void SynchronousIPV4SendSmallBufferTest()
         {
             try
@@ -91,7 +91,7 @@ namespace JordanSdk.Network.TCP.Tests
             }
         }
 
-        [TestMethod(), TestCategory("TCPSocket (Send)")]
+        [TestMethod(), TestCategory("UdpSocket (Send)")]
         public void SynchronousIPV4SendMidSizeBufferTest()
         {
             try
@@ -107,7 +107,7 @@ namespace JordanSdk.Network.TCP.Tests
             }
         }
 
-        [TestMethod(), TestCategory("TCPSocket (Send)")]
+        [TestMethod(), TestCategory("UdpSocket (Send)")]
         public void SynchronousIPV4SendLargeBufferTest()
         {
             try
@@ -124,7 +124,7 @@ namespace JordanSdk.Network.TCP.Tests
         }
 
 
-        [TestMethod(), TestCategory("TCPSocket (Send)")]
+        [TestMethod(), TestCategory("UdpSocket (Send)")]
         public void AsyncCallbackIPV4SendSmallBufferTest()
         {
             try
@@ -148,7 +148,7 @@ namespace JordanSdk.Network.TCP.Tests
             }
         }
 
-        [TestMethod(), TestCategory("TCPSocket (Send)")]
+        [TestMethod(), TestCategory("UdpSocket (Send)")]
         public void AsyncCallbackIPV4SendMidSizeBufferTest()
         {
             try
@@ -172,7 +172,7 @@ namespace JordanSdk.Network.TCP.Tests
             }
         }
 
-        [TestMethod(), TestCategory("TCPSocket (Send)")]
+        [TestMethod(), TestCategory("UdpSocket (Send)")]
         public void AsyncCallbackIPV4SendLargeBufferTest()
         {
             try
@@ -197,7 +197,7 @@ namespace JordanSdk.Network.TCP.Tests
         }
 
 
-        [TestMethod(), TestCategory("TCPSocket (Send)")]
+        [TestMethod(), TestCategory("UdpSocket (Send)")]
         public async Task AsyncTaskIPV4SendSmallBufferTest()
         {
             try
@@ -213,7 +213,7 @@ namespace JordanSdk.Network.TCP.Tests
             }
         }
 
-        [TestMethod(), TestCategory("TCPSocket (Send)")]
+        [TestMethod(), TestCategory("UdpSocket (Send)")]
         public async Task AsyncTaskIPV4SendMidSizeBufferTest()
         {
             try
@@ -229,7 +229,7 @@ namespace JordanSdk.Network.TCP.Tests
             }
         }
 
-        [TestMethod(), TestCategory("TCPSocket (Send)")]
+        [TestMethod(), TestCategory("UdpSocket (Send)")]
         public async Task AsyncTaskIPV4SendLargeBufferTest()
         {
             try
@@ -245,7 +245,7 @@ namespace JordanSdk.Network.TCP.Tests
             }
         }
 
-        [TestMethod(), TestCategory("TCPSocket (Disconnect)")]
+        [TestMethod(), TestCategory("UdpSocket (Disconnect)")]
         public void DisconnectTest()
         {
             var socket = this.CreateIPV4ClientProtocol().Connect();
@@ -254,7 +254,7 @@ namespace JordanSdk.Network.TCP.Tests
             Assert.IsFalse(socket.Connected, "The connection is still open.");
         }
 
-        [TestMethod(), TestCategory("TCPSocket (Disconnect)")]
+        [TestMethod(), TestCategory("UdpSocket (Disconnect)")]
         public async Task AsyncTaskDisconnectTest()
         {
             var socket = this.CreateIPV4ClientProtocol().Connect();
@@ -263,7 +263,7 @@ namespace JordanSdk.Network.TCP.Tests
             Assert.IsFalse(socket.Connected, "The connection is still open.");
         }
 
-        [TestMethod(), TestCategory("TCPSocket (Disconnect)")]
+        [TestMethod(), TestCategory("UdpSocket (Disconnect)")]
         public void AsyncCallbackDisconnectTest()
         {
             mevent.Reset();
@@ -277,7 +277,7 @@ namespace JordanSdk.Network.TCP.Tests
             Assert.IsFalse(socket.Connected, "The connection is still open.");
         }
 
-        [TestMethod(), TestCategory("TCPSocket (Receive)")]
+        [TestMethod(), TestCategory("UdpSocket (Receive)")]
         public void ReceiveTest()
         {
             ISocket serverInstance = null;
@@ -287,7 +287,7 @@ namespace JordanSdk.Network.TCP.Tests
                 serverInstance = isocket;
                 mevent.Set();
             };
-            TCPSocket clientInstance = this.CreateIPV4ClientProtocol().Connect();
+            UdpSocket clientInstance = this.CreateIPV4ClientProtocol().Connect();
             
             mevent.WaitOne();
             Assert.AreEqual<string>(clientInstance.Token, serverInstance.Token, "Both instances had different token issued.");
@@ -298,7 +298,7 @@ namespace JordanSdk.Network.TCP.Tests
             Assert.IsTrue(buffer.Size > 0);
         }
 
-        [TestMethod(), TestCategory("TCPSocket (Receive)")]
+        [TestMethod(), TestCategory("UdpSocket (Receive)")]
         public async Task AsyncTaskReceiveTest()
         {
             ISocket serverInstance = null;
@@ -308,7 +308,7 @@ namespace JordanSdk.Network.TCP.Tests
                 serverInstance = isocket;
                 mevent.Set();
             };
-            TCPSocket clientInstance = this.CreateIPV4ClientProtocol().Connect();
+            UdpSocket clientInstance = this.CreateIPV4ClientProtocol().Connect();
             mevent.WaitOne();
             Assert.AreEqual<string>(clientInstance.Token, serverInstance.Token, "Both instances had different token issued.");
             var sentAsync = Task.Run(async () => { await Task.Delay(20); serverInstance.Send(GetDummyStream()); });
@@ -317,7 +317,7 @@ namespace JordanSdk.Network.TCP.Tests
             Assert.IsTrue(buffer.Size > 0);
         }
 
-        [TestMethod(), TestCategory("TCPSocket (Receive)")]
+        [TestMethod(), TestCategory("UdpSocket (Receive)")]
         public void AsyncCallbackReceiveTest()
         {
             ISocket serverInstance = null;
@@ -327,7 +327,7 @@ namespace JordanSdk.Network.TCP.Tests
                 serverInstance = isocket;
                 mevent.Set();
             };
-            TCPSocket clientInstance = this.CreateIPV4ClientProtocol().Connect();
+            UdpSocket clientInstance = this.CreateIPV4ClientProtocol().Connect();
             mevent.WaitOne();
             Assert.AreEqual<string>(clientInstance.Token, serverInstance.Token, "Both instances had different token issued.");
             var sentAsync = Task.Run(async () => { await Task.Delay(20); serverInstance.Send(GetDummyStream()); });

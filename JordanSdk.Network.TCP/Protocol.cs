@@ -1,6 +1,4 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using System.Net;
@@ -9,12 +7,12 @@ using System.Threading;
 using System.Collections.Concurrent;
 using JordanSdk.Network.Core;
 
-namespace JordanSdk.Network.TCP
+namespace JordanSdk.Network.Tcp
 {
     /// <summary>
     /// This class is the TCP Implementation of IProtocol, and simplifies TCP network management for all possible operations such as listening and accepting incoming connections, connecting as a client to a remote server and much more.
     /// </summary>
-    public class TCPProtocol : IProtocol<TCPSocket>, IDisposable
+    public class TcpProtocol : IProtocol<TcpSocket>, IDisposable
     {
         #region Private Fields
 
@@ -123,12 +121,12 @@ namespace JordanSdk.Network.TCP
         /// Initiates an asynchronous connection to a remote server.
         /// </summary>
         /// <returns>Returns an instance of TCP Socket</returns>
-        public async Task<TCPSocket> ConnectAsync()
+        public async Task<TcpSocket> ConnectAsync()
         {
-            var task = new TaskCompletionSource<TCPSocket>();
+            var task = new TaskCompletionSource<TcpSocket>();
             var endPoint = new IPEndPoint(IPAddress.Parse(Address ?? "127.0.0.1"), Port);
             var socket = new Socket(endPoint.AddressFamily, SocketType.Stream, ProtocolType.Tcp);
-            socket.BeginConnect(endPoint, AsyncConnectCallback, new AsyncState() { Socket = socket, CallBack = task });
+            socket.BeginConnect(endPoint, AsyncConnectCallback, new AsyncState<Socket>() { State = socket, CallBack = task });
             return await task.Task;
         }
 
@@ -136,18 +134,18 @@ namespace JordanSdk.Network.TCP
         /// Initiates an asynchronous connection to a remote server, calling callback once the connection is established.
         /// </summary>
         /// <returns>Returns an instance of TCP Socket</returns>
-        public void ConnectAsync(Action<TCPSocket> callback)
+        public void ConnectAsync(Action<TcpSocket> callback)
         {
             var endPoint = new IPEndPoint(IPAddress.Parse(Address ?? "127.0.0.1"), Port);
             var socket = new Socket(endPoint.AddressFamily, SocketType.Stream, ProtocolType.Tcp);
-            socket.BeginConnect(endPoint, AsyncConnectCallback, new AsyncState() { Socket = socket, CallBack = callback });
+            socket.BeginConnect(endPoint, AsyncConnectCallback, new AsyncState<Socket>() { State = socket, CallBack = callback });
         }
 
         /// <summary>
         /// Initiates a synchronous connection to a remote server.
         /// </summary>
         /// <returns>Returns an instance of TCP Socket</returns>
-        public TCPSocket Connect()
+        public TcpSocket Connect()
         {
             var endPoint = new IPEndPoint(IPAddress.Parse(Address ?? "127.0.0.1"), Port);
             var socket = new Socket(endPoint.AddressFamily, SocketType.Stream, ProtocolType.Tcp);
@@ -275,9 +273,9 @@ namespace JordanSdk.Network.TCP
 
         private void CollectSocket(Socket socket)
         {
-            ISocket isocket = new TCPSocket(socket, Guid.NewGuid().ToString("N"));
+            ISocket isocket = new TcpSocket(socket, Guid.NewGuid().ToString("N"));
             while (!csockets.TryAdd(isocket.Token, isocket))
-                isocket = new TCPSocket(socket, Guid.NewGuid().ToString("N"));
+                isocket = new TcpSocket(socket, Guid.NewGuid().ToString("N"));
             isocket.OnSocketDisconnected += RemoveSocket;
             SendServerToken(isocket);
             OnConnectionRequested?.Invoke(isocket);
@@ -306,7 +304,7 @@ namespace JordanSdk.Network.TCP
             }
         }
 
-        ~TCPProtocol() {
+        ~TcpProtocol() {
             Dispose(false);
         }
 
@@ -314,7 +312,7 @@ namespace JordanSdk.Network.TCP
 
         #endregion
 
-        private static TCPSocket SetupClientToken(Socket socket)
+        private static TcpSocket SetupClientToken(Socket socket)
         {
             if (socket.Connected)
             {
@@ -325,7 +323,7 @@ namespace JordanSdk.Network.TCP
                 {
                     byte[] tokenBytes = new byte[received];
                     Array.ConstrainedCopy(buffer, 0, tokenBytes, 0, received);
-                    return new TCPSocket(socket, Encoding.ASCII.GetString(tokenBytes));
+                    return new TcpSocket(socket, Encoding.ASCII.GetString(tokenBytes));
                 }
                 
             }
@@ -343,19 +341,19 @@ namespace JordanSdk.Network.TCP
 
         private static void AsyncConnectCallback(IAsyncResult ar)
         {
-            AsyncState state = ar.AsyncState as AsyncState;
+            AsyncState<Socket> asyncState = ar.AsyncState as AsyncState<Socket>;
             try
             {
-                state.Socket.EndConnect(ar);
-                if (state.CallBack != null && state.CallBack is Action<TCPSocket>)
-                    (state.CallBack as Action<TCPSocket>).Invoke(SetupClientToken(state.Socket));
-                else if (state.CallBack != null && state.CallBack is TaskCompletionSource<TCPSocket>)
-                    (state.CallBack as TaskCompletionSource<TCPSocket>).SetResult(SetupClientToken(state.Socket));
+                asyncState.State.EndConnect(ar);
+                if (asyncState.CallBack != null && asyncState.CallBack is Action<TcpSocket>)
+                    (asyncState.CallBack as Action<TcpSocket>).Invoke(SetupClientToken(asyncState.State));
+                else if (asyncState.CallBack != null && asyncState.CallBack is TaskCompletionSource<TcpSocket>)
+                    (asyncState.CallBack as TaskCompletionSource<TcpSocket>).SetResult(SetupClientToken(asyncState.State));
             }
             catch (Exception ex)
             {
-                if (ar.AsyncState is TaskCompletionSource<TCPSocket>)
-                    (ar.AsyncState as TaskCompletionSource<TCPSocket>).SetException(ex);
+                if (ar.AsyncState is TaskCompletionSource<TcpSocket>)
+                    (ar.AsyncState as TaskCompletionSource<TcpSocket>).SetException(ex);
                 else
                     throw ex;
             }

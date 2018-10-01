@@ -73,9 +73,9 @@
       <Project>{9df0acf3-7261-4536-8c3a-467aa86f0cdb}</Project>
       <Name>JordanSdk.Network.Core</Name>
     </ProjectReference>
-    <ProjectReference Include="..\JordanSdk.Network.TCP\JordanSdk.Network.TCP.csproj">
+    <ProjectReference Include="..\JordanSdk.Network.TCP\JordanSdk.Network.Tcp.csproj">
       <Project>{acc297a8-d62c-45a7-9c67-5c12f41067e5}</Project>
-      <Name>JordanSdk.Network.TCP</Name>
+      <Name>JordanSdk.Network.Tcp</Name>
     </ProjectReference>
   </ItemGroup>
   <Choose>

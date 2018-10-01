@@ -4,11 +4,11 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace JordanSdk.Network.TCP
+namespace JordanSdk.Network.Core
 {
-    internal class GenericAsyncState <T> : AsyncState
+    public class AsyncTupleState <T, U> : AsyncState<T>
     {
-        public T Data { get; set; }
+        public U Data { get; set; }
 
     }
 }
