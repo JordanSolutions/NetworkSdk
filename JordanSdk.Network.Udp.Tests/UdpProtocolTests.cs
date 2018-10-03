@@ -37,7 +37,7 @@ namespace JordanSdk.Network.Udp.Tests
                 ipv6Protocol.StopListening();
         }
 
-        [TestMethod(), TestCategory("TCPProtocol (Listen)")]
+        [TestMethod(), TestCategory("UDPProcotol (Listen)")]
         public void ListenIPV4Test()
         {
             ipv4Protocol.Listen();
@@ -46,14 +46,14 @@ namespace JordanSdk.Network.Udp.Tests
 
 
 
-        [TestMethod(), TestCategory("TCPProtocol (Listen)")]
+        [TestMethod(), TestCategory("UDPProcotol (Listen)")]
         public void ListenIPV6Test()
         {
             ipv6Protocol.Listen();
             Assert.IsTrue(ipv6Protocol.Listening, "Listening Flag was not turned on.");
         }
 
-        [TestMethod(), TestCategory("TCPProtocol (Listen)")]
+        [TestMethod(), TestCategory("UDPProcotol (Listen)")]
         public void ListenMultipleInstancesTest()
         {
 
@@ -63,7 +63,7 @@ namespace JordanSdk.Network.Udp.Tests
             Assert.IsTrue(ipv4Protocol.Listening, "Listening Flag was not turned on for IPV4");
         }
 
-        [TestMethod(), TestCategory("TCPProtocol (Stop Listening)")]
+        [TestMethod(), TestCategory("UDPProcotol (Stop Listening)")]
         public void StopListeningTest()
         {
             ipv4Protocol.Listen();
@@ -76,7 +76,7 @@ namespace JordanSdk.Network.Udp.Tests
             Assert.IsFalse(ipv4Protocol.Listening, "Listening Flag was turned on for IPV4");
         }
 
-        [TestMethod(), TestCategory("TCPProtocol (Dispose)")]
+        [TestMethod(), TestCategory("UDPProcotol (Dispose)")]
         public void DisposeTest()
         {
             var ipv4Protocol = new UdpProtocol();
@@ -87,7 +87,7 @@ namespace JordanSdk.Network.Udp.Tests
             Assert.IsTrue(true);
         }
 
-        [TestMethod(), TestCategory("TCPProtocol (Connect)")]
+        [TestMethod(), TestCategory("UDPProcotol (Connect)")]
         public void ConnectAsyncIPV4CallbackTest()
         {
             mevent.Reset();
@@ -108,7 +108,7 @@ namespace JordanSdk.Network.Udp.Tests
             }
         }
 
-        [TestMethod(), TestCategory("TCPProtocol (Connect)")]
+        [TestMethod(), TestCategory("UDPProcotol (Connect)")]
         public void ConnectAsyncIPV6CallbackTest()
         {
             mevent.Reset();
@@ -129,7 +129,7 @@ namespace JordanSdk.Network.Udp.Tests
             }
         }
 
-        [TestMethod(), TestCategory("TCPProtocol (Connect)")]
+        [TestMethod(), TestCategory("UDPProcotol (Connect)")]
         public async Task ConnectAsyncIPV4TaskTest()
         {
 
@@ -147,7 +147,7 @@ namespace JordanSdk.Network.Udp.Tests
             }
         }
 
-        [TestMethod(), TestCategory("TCPProtocol (Connect)")]
+        [TestMethod(), TestCategory("UDPProcotol (Connect)")]
         public async Task ConnectAsyncIPV6TaskTest()
         {
             try
@@ -165,7 +165,7 @@ namespace JordanSdk.Network.Udp.Tests
         }
 
 
-        [TestMethod(), TestCategory("TCPProtocol (Connect)")]
+        [TestMethod(), TestCategory("UDPProcotol (Connect)")]
         public void ConnectIPV4Test()
         {
             try
@@ -181,7 +181,7 @@ namespace JordanSdk.Network.Udp.Tests
             }
         }
 
-        [TestMethod(), TestCategory("TCPProtocol (Connect)")]
+        [TestMethod(), TestCategory("UDPProcotol (Connect)")]
         public void ConnectIPV6Test()
         {
             try
@@ -197,7 +197,7 @@ namespace JordanSdk.Network.Udp.Tests
             }
         }
 
-        [TestMethod(), TestCategory("TCPProcotol (On Connection Requested Event)")]
+        [TestMethod(), TestCategory("UDPProcotol (On Connection Requested Event)")]
         public void OnConnectionRequestedTest()
         {
             ipv4Protocol.Listen();
@@ -210,7 +210,8 @@ namespace JordanSdk.Network.Udp.Tests
             };
             UdpProtocol ipvClient = this.CreateIPV4ClientProtocol();
             UdpSocket clientSocket = ipvClient.Connect();
-            mevent.WaitOne(1000);
+            Assert.IsTrue(clientSocket.Connected);
+            mevent.WaitOne(10000);
             Assert.IsTrue(eventInvoked);
         }
 

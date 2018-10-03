@@ -14,9 +14,6 @@ namespace JordanSdk.Network.Udp.Tests
     public class UdpSocketTests
     {
         #region Fields
-        static byte[] BIG_BUFFER_DATA;
-        static byte[] HUGE_BUFFER_DATA;
-
         System.Threading.ManualResetEvent mevent;
         static UdpProtocol ipv4Server;
         static UdpProtocol ipv6Server;
@@ -53,13 +50,6 @@ namespace JordanSdk.Network.Udp.Tests
             ipv6Server.Port = 4884;
             ipv6Server.IPAddressKind = IPAddressKind.IPV6;
             ipv6Server.Listen();
-
-            BIG_BUFFER_DATA = new byte[3000];
-            Random rnd = new Random();
-            rnd.NextBytes(BIG_BUFFER_DATA);
-            HUGE_BUFFER_DATA = new byte[Int16.MaxValue * 2];
-            rnd.NextBytes(HUGE_BUFFER_DATA);
-
             
         }
 
@@ -97,7 +87,7 @@ namespace JordanSdk.Network.Udp.Tests
             try
             {
                
-                NetworkBuffer buffer = GetBigStream();
+                NetworkBuffer buffer = TestData.GetBigStream();
                 int sent = ipv4Client.Send(buffer);
                 Assert.AreEqual(buffer.Size, sent, "Not all bytes were sent");
             }
@@ -113,7 +103,7 @@ namespace JordanSdk.Network.Udp.Tests
             try
             {
               
-                NetworkBuffer buffer = GetHugeStream();
+                NetworkBuffer buffer = TestData.GetHugeStream();
                 int sent = ipv4Client.Send(buffer);
                 Assert.AreEqual(buffer.Size, sent, "Not all bytes were sent");
             }
@@ -133,6 +123,7 @@ namespace JordanSdk.Network.Udp.Tests
                 NetworkBuffer buffer = GetDummyStream();
                 mevent.Reset();
                 int bytesSent = 0;
+                Assert.IsTrue(ipv4Client.Connected);
                 ipv4Client.SendAsync(buffer,(sent) =>
                 {
                     bytesSent = sent;
@@ -154,7 +145,7 @@ namespace JordanSdk.Network.Udp.Tests
             try
             {
 
-                NetworkBuffer buffer = GetBigStream();
+                NetworkBuffer buffer = TestData.GetBigStream();
                 mevent.Reset();
                 int bytesSent = 0;
                 ipv4Client.SendAsync(buffer, (sent) =>
@@ -178,7 +169,7 @@ namespace JordanSdk.Network.Udp.Tests
             try
             {
 
-                NetworkBuffer buffer = GetHugeStream();
+                NetworkBuffer buffer = TestData.GetHugeStream();
                 mevent.Reset();
                 int bytesSent = 0;
                 ipv4Client.SendAsync(buffer, (sent) =>
@@ -219,7 +210,7 @@ namespace JordanSdk.Network.Udp.Tests
             try
             {
 
-                NetworkBuffer buffer = GetBigStream();
+                NetworkBuffer buffer = TestData.GetBigStream();
                 int bytesSent = await ipv4Client.SendAsync(buffer);
                 Assert.AreEqual(buffer.Size, bytesSent, "Not all bytes were sent");
             }
@@ -235,7 +226,7 @@ namespace JordanSdk.Network.Udp.Tests
             try
             {
 
-                NetworkBuffer buffer = GetHugeStream();
+                NetworkBuffer buffer = TestData.GetHugeStream();
                 int bytesSent = await ipv4Client.SendAsync(buffer);
                 Assert.AreEqual(buffer.Size, bytesSent, "Not all bytes were sent");
             }
@@ -352,12 +343,6 @@ namespace JordanSdk.Network.Udp.Tests
             byte[] helloWorld = System.Text.Encoding.UTF8.GetBytes("Hello World.");
             return new NetworkBuffer(helloWorld.Length, helloWorld);
         }
-
-        private static NetworkBuffer GetHugeStream() => new NetworkBuffer(HUGE_BUFFER_DATA.Length, HUGE_BUFFER_DATA);
-
-
-        private static NetworkBuffer GetBigStream() => new NetworkBuffer(BIG_BUFFER_DATA.Length, BIG_BUFFER_DATA);
-
         #endregion
     }
 }

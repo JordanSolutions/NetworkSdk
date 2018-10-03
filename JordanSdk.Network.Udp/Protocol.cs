@@ -81,7 +81,7 @@ namespace JordanSdk.Network.Udp
         /// <summary>
         /// This event is invoked when a client attempts to establish a socket connection in order to give an opportunity to the protocol owner to accept or reject the connection.
         /// </summary>
-        public event UserConnectedDelegate OnConnectionRequested;
+        public event SocketConnectedDelegate OnConnectionRequested;
 
         #endregion
 
@@ -283,7 +283,7 @@ namespace JordanSdk.Network.Udp
             while (!csockets.TryAdd(isocket.Token, isocket))
                 isocket = new UdpSocket(socket, endPoint, Guid.NewGuid().ToString("N"));
             isocket.OnSocketDisconnected += RemoveSocket;
-            SendServerToken(isocket);
+            SendServerToken(socket,isocket.Token,endPoint);
             OnConnectionRequested?.Invoke(isocket);
         }
         private void RemoveSocket(ISocket socket)
@@ -324,46 +324,38 @@ namespace JordanSdk.Network.Udp
             byte[] buffer = new byte[BUFFER_SIZE];
             UdpSocket result = null;
             SocketError error;
-            TaskCompletionSource<bool> task = new TaskCompletionSource<bool>();
-            socket.BeginSendTo(new byte[] { 1 }, 0, 1, 0, endPoint, (state) =>
+            TaskCompletionSource<bool> sendTask = new TaskCompletionSource<bool>();
+            socket.BeginSendTo(new byte[] { 1 }, 0, 1, 0, endPoint, (sendState) =>
             {
-                var asyncState = state.AsyncState as AsyncState<Socket>;
-                int sent = asyncState.State.EndSendTo(state);
-                if (sent == 1)
-                    task.SetResult(true);
-                else
-                    task.SetResult(false);
-            }, new AsyncState<Socket>() { CallBack = task, State = socket });
-
-            if(await task.Task)
-            {
-                task = new TaskCompletionSource<bool>();
-                socket.BeginReceiveFrom(buffer, 0, BUFFER_SIZE, 0, ref endPoint, (state) =>
+                var asyncState = sendState.AsyncState as AsyncState<Socket>;
+                int sent = asyncState.State.EndSendTo(sendState);
+                socket.BeginReceiveFrom(buffer, 0, BUFFER_SIZE, 0, ref endPoint, (receiveState) =>
                 {
-                    int received = socket.EndReceiveFrom(state,ref endPoint);
+                    int received = socket.EndReceiveFrom(receiveState, ref endPoint);
                     if (received > 0)
                     {
                         byte[] tokenBytes = new byte[received];
                         Array.ConstrainedCopy(buffer, 0, tokenBytes, 0, received);
                         result = new UdpSocket(socket, endPoint as IPEndPoint, Encoding.ASCII.GetString(tokenBytes)) { Connected = true };
-                        task.SetResult(true);
+                        sendTask.SetResult(true);
                     }
                     else
-                        task.SetResult(false);
+                        sendTask.SetResult(false);
 
                 }, socket);
-                await task.Task;
-            }
+                //if (sent == 1)
+                //    sendTask.SetResult(true);
+                //else
+                //    sendTask.SetResult(false);
+            }, new AsyncState<Socket>() { CallBack = sendTask, State = socket });
+            await sendTask.Task;
             return result;
         }
 
-        private static void SendServerToken(ISocket socket)
+        private static void SendServerToken(Socket socket, string token, EndPoint remote)
         {
-            byte[] token = Encoding.ASCII.GetBytes(socket.Token);
-            using(NetworkBuffer buffer = new NetworkBuffer(token.Length, token))
-            {
-                socket.Send(buffer);
-            }
+            byte[] _token = Encoding.ASCII.GetBytes(token);
+            socket.SendTo(_token, remote);
         }
 
         //private static void AsyncConnectCallback(IAsyncResult ar)

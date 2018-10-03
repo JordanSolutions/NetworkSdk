@@ -73,7 +73,7 @@ namespace JordanSdk.Network.Tcp
         /// <summary>
         /// This event is invoked when a client attempts to establish a socket connection in order to give an opportunity to the protocol owner to accept or reject the connection.
         /// </summary>
-        public event UserConnectedDelegate OnConnectionRequested;
+        public event SocketConnectedDelegate OnConnectionRequested;
 
         #endregion
 
@@ -153,6 +153,9 @@ namespace JordanSdk.Network.Tcp
             return SetupClientToken(socket);
         }
 
+        /// <summary>
+        /// Releases allocated resources.
+        /// </summary>
         public void Dispose()
         {
             Dispose(true);

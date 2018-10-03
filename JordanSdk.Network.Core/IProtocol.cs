@@ -30,7 +30,7 @@ namespace JordanSdk.Network.Core
         /// <summary>
         /// Event that is fired when a client connects.
         /// </summary>
-        event UserConnectedDelegate OnConnectionRequested;
+        event SocketConnectedDelegate OnConnectionRequested;
 
         /// <summary>
         /// Stops listening for incoming connections and closes all current client connections.

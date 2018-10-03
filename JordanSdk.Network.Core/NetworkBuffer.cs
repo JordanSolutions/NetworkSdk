@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Security.Cryptography;
 using System.Text;
 
 namespace JordanSdk.Network.Core
@@ -53,8 +54,20 @@ namespace JordanSdk.Network.Core
                 buffer = new MemoryStream(size);
                 buffer.Write(initialData, 0, initialData.Length);
             }
-                received = initialData.Length;
+            received = initialData.Length;
+        }
 
+
+        /// <summary>
+        /// Initializes an empty buffer.
+        /// </summary>
+        /// <param name="size"></param>
+        public NetworkBuffer(MemoryStream data)
+        {
+            data.Position = 0;
+            this.size = (int)data.Length;
+            received = (int)data.Length;
+            buffer = data;
         }
 
         /// <summary>
@@ -208,6 +221,12 @@ namespace JordanSdk.Network.Core
                 received = _copySize;
                 size = newSize;
             }
+        }
+
+        public byte[] GetChecksum()
+        {
+            using (MD5 hashCreator = MD5.Create())
+                return hashCreator.ComputeHash(buffer.ToArray());
         }
 
         #region IDisposable Support

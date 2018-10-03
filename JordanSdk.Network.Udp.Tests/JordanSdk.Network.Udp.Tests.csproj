@@ -45,7 +45,10 @@
     <Compile Include="UdpSocketTests.cs" />
     <Compile Include="UdpProtocolTests.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
+    <Compile Include="HeadTests.cs" />
+    <Compile Include="PackageContainerTests.cs" />
     <Compile Include="Utilities\Extensions.cs" />
+    <Compile Include="Utilities\TestData.cs" />
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="MSTest.TestAdapter">

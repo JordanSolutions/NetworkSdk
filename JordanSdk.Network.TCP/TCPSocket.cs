@@ -46,6 +46,9 @@ namespace JordanSdk.Network.Tcp
 
         #region Connection Management
 
+        /// <summary>
+        /// Disconnects the socket blocking until the operation completes.
+        /// </summary>
         public void Disconnect()
         {
             socket.Shutdown(SocketShutdown.Both);
@@ -54,12 +57,16 @@ namespace JordanSdk.Network.Tcp
             OnSocketDisconnected?.Invoke(this);
         }
 
+        /// <summary>
+        /// Disconnects the socket asynchronously.
+        /// </summary>
+        /// <returns>Returns a Task that can be used to wait for the operation to complete.</returns>
         public async Task DisconnectAsync()
         {
 
             TaskCompletionSource<bool> task = new TaskCompletionSource<bool>();
             socket.Shutdown(SocketShutdown.Both);
-            var iasyncResult = socket.BeginDisconnect(false, (e) =>
+            socket.BeginDisconnect(false, (e) =>
             {
                 try
                 {
@@ -78,6 +85,10 @@ namespace JordanSdk.Network.Tcp
             await task.Task;
         }
 
+        /// <summary>
+        /// Use this function to disconnect the socket asynchronously. Once the operation succeeds, the provided callback will be invoked.
+        /// </summary>
+        /// <param name="callback">Callback invoked when the socket is disconnected.</param>
         public void DisconnectAsync(Action callback)
         {
             socket.Shutdown(SocketShutdown.Both);
@@ -104,6 +115,11 @@ namespace JordanSdk.Network.Tcp
 
         #region Sending
 
+        /// <summary>
+        /// Use this function to send a buffer over the network. This method blocks until all data in buffer is sent.
+        /// </summary>
+        /// <param name="data">Data to be written to the network.</param>
+        /// <returns>Returns the amount of bytes sent.</returns>
         public int Send(INetworkBuffer data)
         {
             int bytesSent = 0;
@@ -118,6 +134,11 @@ namespace JordanSdk.Network.Tcp
             return bytesSent;
         }
 
+        /// <summary>
+        /// Use this function to send data over the network asynchronously.
+        /// </summary>
+        /// <param name="data">Data to be written to the network.</param>
+        /// <returns>Returns the amount of bytes written to the network.</returns>
         public async Task<int> SendAsync(INetworkBuffer data)
         {
             TaskCompletionSource<int> task = new TaskCompletionSource<int>();
@@ -129,6 +150,11 @@ namespace JordanSdk.Network.Tcp
             return await task.Task;
         }
 
+        /// <summary>
+        /// Use this function to send data over the network asynchronously. This method will invoke the provided action once the operation completes in order to provide feedback.
+        /// </summary>
+        /// <param name="data">INetworkBuffer containing the data to be sent.</param>
+        /// <param name="callback">Callback invoked once the write operation concludes, containing the amount of bytes sent through the network.</param>
         public void SendAsync(INetworkBuffer data, Action<int> callback)
         {
             //Need to create an immutable copy if the total count of bytes is greater than buffer size.
@@ -142,12 +168,20 @@ namespace JordanSdk.Network.Tcp
 
         #region Receiving Data
 
+        /// <summary>
+        /// Use this function to receive data from the network asynchronously. This function will invoke the provided action once data is received.
+        /// </summary>
+        /// <param name="callback">Callback to be invoked when data is received.</param>
         public void ReceiveAsync(Action<INetworkBuffer> callback)
         {
             byte[] buffer = new byte[TcpProtocol.BUFFER_SIZE];
             socket.BeginReceive(buffer, 0, TcpProtocol.BUFFER_SIZE, 0, ReceiveCallback, new AsyncTupleState<Socket, byte[]>() { State = socket, Data = buffer, CallBack = callback });
         }
 
+        /// <summary>
+        /// Use this function to receive data from the network asynchronously.
+        /// </summary>
+        /// <returns>Returns an INetworkBuffer object with data received.</returns>
         public async Task<INetworkBuffer> ReceiveAsync()
         {
             byte[] buffer = new byte[TcpProtocol.BUFFER_SIZE];
@@ -156,6 +190,10 @@ namespace JordanSdk.Network.Tcp
             return await task.Task;
         }
 
+        /// <summary>
+        /// Use this function to receive data from the network. This function blocks until data is received.
+        /// </summary>
+        /// <returns>Returns a Network Buffer with the data received.</returns>
         public INetworkBuffer Receive()
         {
             byte[] buffer = new byte[TcpProtocol.BUFFER_SIZE];

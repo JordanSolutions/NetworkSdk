@@ -17,9 +17,9 @@ namespace JordanSdk.Network.Udp.Tests
 
         public static UdpProtocol CreateIPV6ClientProtocol(this UdpSocketTests test) => CreateIPV6ClientProtocol();
 
-        public static NetworkBuffer CreateDummyStream(this UdpProtocolTests test) => GetDummyStream();
+        public static NetworkBuffer CreateDummyStream(this UdpProtocolTests test) => TestData.GetDummyStream();
 
-        public static NetworkBuffer CreateDummyStream(this UdpSocketTests test) => GetDummyStream();
+        public static NetworkBuffer CreateDummyStream(this UdpSocketTests test) => TestData.GetDummyStream();
 
         private static UdpProtocol CreateIPV4ClientProtocol()
         {
@@ -41,11 +41,6 @@ namespace JordanSdk.Network.Udp.Tests
                 Port = 4884
             };
         }
-
-        private static NetworkBuffer GetDummyStream()
-        {
-            byte[] helloWorld = System.Text.Encoding.UTF8.GetBytes("Hello World.");
-            return new NetworkBuffer(helloWorld.Length, helloWorld);
-        }
+      
     }
 }

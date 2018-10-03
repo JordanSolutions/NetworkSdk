@@ -65,5 +65,11 @@ namespace JordanSdk.Network.Core
         /// </summary>
         /// <returns>Returns a network buffer containing a copy of the original.</returns>
         INetworkBuffer Clone();
+
+        /// <summary>
+        /// Use this function to get the checksum of the data stored in buffer. Note that this will only include written data, is advice to call this function only when all data has been written.
+        /// </summary>
+        /// <returns>A byte array with 16 elements containing the checksum of the stored data.</returns>
+        byte[] GetChecksum();
     }
 }

@@ -3,6 +3,8 @@ using System.Threading.Tasks;
 using System.Net.Sockets;
 using JordanSdk.Network.Core;
 using System.Net;
+using JordanSdk.Network.Udp.Packages;
+using System.Linq;
 
 namespace JordanSdk.Network.Udp
 {
@@ -25,8 +27,14 @@ namespace JordanSdk.Network.Udp
 
         #region Public Properties
 
+        /// <summary>
+        /// This property indicates the connected state of your socket.
+        /// </summary>
         public bool Connected { get { return connected; } internal set { connected = value; } }
 
+        /// <summary>
+        /// This property contains a unique identifier allocated by the server.
+        /// </summary>
         public string Token { get { return token; } }
 
         #endregion
@@ -63,118 +71,139 @@ namespace JordanSdk.Network.Udp
 
         public async Task DisconnectAsync()
         {
-
-            TaskCompletionSource<bool> task = new TaskCompletionSource<bool>();
-            socket.Shutdown(SocketShutdown.Both);
-            var iasyncResult = socket.BeginDisconnect(false, (e) =>
+            await Task.Run(() =>
             {
-                try
-                {
-                    socket.EndDisconnect(e);
-                    socket.Close();
-                    Connected = false;
-                    task.TrySetResult(true);
-                }
-                catch (Exception ex)
-                {
-                    task.SetException(ex);
-                }
-                finally
-                {
-                    OnSocketDisconnected?.Invoke(this);
-                }
-            }, this);
-            await task.Task;
+                socket.Shutdown(SocketShutdown.Both);
+                socket.Close();
+                Connected = false;
+                OnSocketDisconnected?.Invoke(this);
+            });
         }
 
         public void DisconnectAsync(Action callback)
         {
-            socket.Shutdown(SocketShutdown.Both);
-            socket.BeginDisconnect(false, (e) =>
+            Task.Run(() =>
             {
-                try
-                {
-                    socket.EndDisconnect(e);
-                    socket.Close();
-                    Connected = false;
-                    callback?.Invoke();
-                }
-                catch (Exception ex)
-                {
-                    throw ex;
-                }
-                finally
-                {
-                    OnSocketDisconnected?.Invoke(this);
-                }
-            }, this);
+                socket.Shutdown(SocketShutdown.Both);
+                socket.Close();
+                Connected = false;
+                callback?.Invoke();
+                OnSocketDisconnected?.Invoke(this);
+            });
         }
 
         #endregion
 
         #region Sending
 
+        /// <summary>
+        /// Use this function to send a buffer over the network. This method blocks until all data in buffer is sent.
+        /// </summary>
+        /// <param name="data">Data to be written to the network.</param>
+        /// <returns>Returns the amount of bytes sent.</returns>
         public int Send(INetworkBuffer data)
         {
             int bytesSent = 0;
-            var clone = data.Size > UdpProtocol.BUFFER_SIZE ? data.Clone() : data;
+            var clone = data.Clone();
             clone.ResetPosition();
-            byte[] _data = clone.Read(UdpProtocol.BUFFER_SIZE);
-            while (_data != null)
+            Package package = new Head(clone);
+            while(package != null)
             {
-                bytesSent += socket.SendTo(_data, endPoint);
-                _data = clone.Read(UdpProtocol.BUFFER_SIZE);
+                var _data = package.Pack();
+                int sent = socket.SendTo(_data, endPoint);
+                if (_data.Length == sent)
+                    bytesSent += package.Data?.Length ?? 0;
+                package = package.Next;
             }
             return bytesSent;
         }
 
+        /// <summary>
+        /// Use this function to send data over the network asynchronously.
+        /// </summary>
+        /// <param name="data">Data to be written to the network.</param>
+        /// <returns>Returns the amount of bytes written to the network.</returns>
         public async Task<int> SendAsync(INetworkBuffer data)
         {
             TaskCompletionSource<int> task = new TaskCompletionSource<int>();
             //Need to create an immutable copy if the total count of bytes is greater than buffer size.
             var clone = data.Size > UdpProtocol.BUFFER_SIZE ? data.Clone() : data;
             clone.ResetPosition();
-            byte[] _data = clone.Read(UdpProtocol.BUFFER_SIZE);
-            var iresult = socket.BeginSendTo(_data, 0, _data.Length, 0,endPoint, SendCallback, new AsyncTripletState<Socket, INetworkBuffer, int>() { State = socket, Data = clone, Complement = 0, CallBack = task });
+            Package package = new Head(clone);
+            var _data = package.Pack();
+            var iresult = socket.BeginSendTo(_data, 0, _data.Length, 0, endPoint, SendCallback, new AsyncTripletState<Socket, Package, int>() { State = socket, Data = package, Complement = 0, CallBack = task });
             return await task.Task;
         }
 
+        /// <summary>
+        /// Use this function to send data over the network asynchronously. This method will invoke the provided action once the operation completes in order to provide feedback.
+        /// </summary>
+        /// <param name="data">INetworkBuffer containing the data to be sent.</param>
+        /// <param name="callback">Callback invoked once the write operation concludes, containing the amount of bytes sent through the network.</param>
         public void SendAsync(INetworkBuffer data, Action<int> callback)
         {
             //Need to create an immutable copy if the total count of bytes is greater than buffer size.
             var clone = data.Size > UdpProtocol.BUFFER_SIZE ? data.Clone() : data;
             clone.ResetPosition();
-            byte[] _data = clone.Read(UdpProtocol.BUFFER_SIZE);
-            socket.BeginSendTo(_data, 0, _data.Length, 0,endPoint, SendCallback, new AsyncTripletState<Socket, INetworkBuffer, int>() { State = socket, Data = clone, Complement = 0, CallBack = callback });
+            Package package = new Head(clone);
+            var _data = package.Pack();
+            var iresult = socket.BeginSendTo(_data, 0, _data.Length, 0, endPoint, SendCallback, new AsyncTripletState<Socket, Package, int>() { State = socket, Data = package, Complement = 0, CallBack = callback });
         }
 
         #endregion
 
         #region Receiving Data
 
+        /// <summary>
+        /// Use this function to receive data from the network asynchronously. This function will invoke the provided action once data is received.
+        /// </summary>
+        /// <param name="callback">Callback to be invoked when data is received.</param>
         public void ReceiveAsync(Action<INetworkBuffer> callback)
         {
             byte[] buffer = new byte[UdpProtocol.BUFFER_SIZE];
-            socket.BeginReceiveFrom(buffer, 0, UdpProtocol.BUFFER_SIZE, 0, ref endPoint, ReceiveCallback, new AsyncTupleState<Socket, byte[]>() { State = socket, Data = buffer, CallBack = callback });
+            PackageContainer packageReceiver = new PackageContainer();
+            socket.BeginReceiveFrom(buffer, 0, UdpProtocol.BUFFER_SIZE, 0, ref endPoint, ReceiveCallback, new AsyncTripletState<Socket, byte[], PackageContainer>() { State = socket, Data = buffer, CallBack = callback, Complement = packageReceiver });
         }
 
+        /// <summary>
+        /// Use this function to receive data from the network asynchronously.
+        /// </summary>
+        /// <returns>Returns an INetworkBuffer object with data received.</returns>
         public async Task<INetworkBuffer> ReceiveAsync()
         {
             byte[] buffer = new byte[UdpProtocol.BUFFER_SIZE];
             var task = new TaskCompletionSource<INetworkBuffer>();
-            socket.BeginReceiveFrom(buffer, 0, UdpProtocol.BUFFER_SIZE, 0, ref endPoint, ReceiveCallback, new AsyncTupleState<Socket, byte[]>() { State = socket, Data = buffer, CallBack = task });
+            PackageContainer packageReceiver = new PackageContainer();
+            socket.BeginReceiveFrom(buffer, 0, UdpProtocol.BUFFER_SIZE, 0, ref endPoint, ReceiveCallback, new AsyncTripletState<Socket, byte[], PackageContainer>() { State = socket, Data = buffer, CallBack = task, Complement = packageReceiver });
             return await task.Task;
         }
 
+        /// <summary>
+        /// Use this function to receive data from the network. This function blocks until data is received.
+        /// </summary>
+        /// <returns>Returns a Network Buffer with the data received.</returns>
         public INetworkBuffer Receive()
         {
-            byte[] buffer = new byte[UdpProtocol.BUFFER_SIZE];
-
-            int size = socket.ReceiveFrom(buffer, 0, UdpProtocol.BUFFER_SIZE, 0, ref endPoint);
-            NetworkBuffer result = new NetworkBuffer(size);
-            if (size > 0)
-                result.AppendConstrained(buffer, 0, (uint)size);
-            return result;
+            PackageContainer packageReceiver = new PackageContainer();
+            while (!packageReceiver.IsComplete())
+            {
+                byte[] buffer = new byte[UdpProtocol.BUFFER_SIZE];
+                int size = socket.ReceiveFrom(buffer, 0, UdpProtocol.BUFFER_SIZE, 0, ref endPoint);
+                if (size > 0)
+                {
+                    var _copy = new byte[size];
+                    Array.Copy(buffer, 0, _copy, 0, size);
+                    if (!packageReceiver.Parse(_copy))
+                    {
+                        //We received a new package while the previous one was incomplete. For now, the behavior is to discard the old package and continue with the new.
+                        packageReceiver = new PackageContainer();
+                        packageReceiver.Parse(_copy);
+                    }
+                }
+            }
+            if (packageReceiver.IsComplete())
+                return packageReceiver.ToBuffer();
+            return null;
         }
 
         #endregion
@@ -185,18 +214,26 @@ namespace JordanSdk.Network.Udp
 
         private void ReceiveCallback(IAsyncResult ar)
         {
-            AsyncTupleState<Socket, byte[]> state = ar.AsyncState as AsyncTupleState<Socket, byte[]>;
+            AsyncTripletState<Socket, byte[], PackageContainer> state = ar.AsyncState as AsyncTripletState<Socket, byte[], PackageContainer>;
             try
             {
                 int size = state.State.EndReceiveFrom(ar,ref endPoint);
-                NetworkBuffer result = new NetworkBuffer(size);
+                byte[] received = null;
                 if (size > 0)
-                    result.AppendConstrained(state.Data, 0, (uint)size);
-
-                if (state.CallBack != null && state.CallBack is Action<INetworkBuffer>)
-                    (state.CallBack as Action<INetworkBuffer>).Invoke(result);
-                else if (state.CallBack != null & state.CallBack is TaskCompletionSource<INetworkBuffer>)
-                    (state.CallBack as TaskCompletionSource<INetworkBuffer>).SetResult(result);
+                {
+                    received = new byte[size];
+                    Array.Copy(state.Data, 0, received, 0, size);
+                    state.Complement.Parse(received);
+                }
+                if (state.Complement.IsComplete())
+                {
+                    if (state.CallBack != null && state.CallBack is Action<INetworkBuffer>)
+                        (state.CallBack as Action<INetworkBuffer>).Invoke(state.Complement.ToBuffer());
+                    else if (state.CallBack != null & state.CallBack is TaskCompletionSource<INetworkBuffer>)
+                        (state.CallBack as TaskCompletionSource<INetworkBuffer>).SetResult(state.Complement.ToBuffer());
+                }
+                else
+                    state.State.BeginReceiveFrom(state.Data, 0, UdpProtocol.BUFFER_SIZE, 0, ref endPoint, ReceiveCallback, state);
             }
             catch (Exception ex)
             {
@@ -209,15 +246,15 @@ namespace JordanSdk.Network.Udp
 
         private void SendCallback(IAsyncResult ar)
         {
-            AsyncTripletState<Socket, INetworkBuffer, int> state = ar.AsyncState as AsyncTripletState<Socket, INetworkBuffer, int>;
+            AsyncTripletState<Socket, Package, int> state = ar.AsyncState as AsyncTripletState<Socket, Package, int>;
             try
             {
                 int sent = state.State.EndSendTo(ar);
                 if (sent > 0)
-                    state.Complement += sent;
-                var remaining = state.Data.Read(UdpProtocol.BUFFER_SIZE);
-
-                if (remaining == null)
+                {
+                    state.Complement += state.Data.Data?.Length??0;
+                }
+                if (state.Data.Next == null)
                 {
                     if (state.CallBack != null && state.CallBack is Action<int>)
                         (state.CallBack as Action<int>).Invoke(state.Complement);
@@ -225,7 +262,11 @@ namespace JordanSdk.Network.Udp
                         (state.CallBack as TaskCompletionSource<int>).SetResult(state.Complement);
                 }
                 else
-                    state.State.BeginSend(remaining, 0, remaining.Length, 0, SendCallback, state);
+                {
+                    var package = state.Data.Next.Pack();
+                    state.Data = state.Data.Next;
+                    state.State.BeginSendTo(package, 0, package.Length, 0, endPoint, SendCallback, state);
+                }
             }
             catch (Exception ex)
             {
