@@ -121,7 +121,7 @@ namespace JordanSdk.Network.Tcp.Tests
             try
             {
                
-                NetworkBuffer buffer = TestData.GetBigStream();
+                NetworkBuffer buffer = TestData.GetLargeBuffer();
 
                 int sent = 0;
                 byte[] sentData = null;
@@ -144,7 +144,7 @@ namespace JordanSdk.Network.Tcp.Tests
             try
             {
               
-                NetworkBuffer buffer = TestData.GetHugeStream();
+                NetworkBuffer buffer = TestData.GetMidSizeBuffer();
                 int sent = 0;
                 byte[] sentData = null;
                 while (null != (sentData = buffer.Read(TcpProtocol.BUFFER_SIZE)))
@@ -192,7 +192,7 @@ namespace JordanSdk.Network.Tcp.Tests
             try
             {
 
-                NetworkBuffer buffer = TestData.GetBigStream();
+                NetworkBuffer buffer = TestData.GetLargeBuffer();
                 byte[] sentData = null;
                 int bytesSent = 0;
                 while (null != (sentData = buffer.Read(TcpProtocol.BUFFER_SIZE)))
@@ -221,7 +221,7 @@ namespace JordanSdk.Network.Tcp.Tests
             try
             {
 
-                NetworkBuffer buffer = TestData.GetHugeStream();
+                NetworkBuffer buffer = TestData.GetMidSizeBuffer();
                 byte[] sentData = null;
                 int bytesSent = 0;
                 while ((sentData = buffer.Read(TcpProtocol.BUFFER_SIZE)) != null)
@@ -268,7 +268,7 @@ namespace JordanSdk.Network.Tcp.Tests
             try
             {
 
-                NetworkBuffer buffer = TestData.GetBigStream();
+                NetworkBuffer buffer = TestData.GetLargeBuffer();
 
                 byte[] sentData = null;
                 int bytesSent = 0;
@@ -291,7 +291,7 @@ namespace JordanSdk.Network.Tcp.Tests
             try
             {
 
-                NetworkBuffer buffer = TestData.GetHugeStream();
+                NetworkBuffer buffer = TestData.GetMidSizeBuffer();
                 byte[] sentData = null;
                 int bytesSent = 0;
                 while (null != (sentData = buffer.Read(TcpProtocol.BUFFER_SIZE)))

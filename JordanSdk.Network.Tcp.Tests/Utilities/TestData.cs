@@ -9,16 +9,16 @@ namespace JordanSdk.Network.Tcp.Tests
 {
     static class TestData
     {
-        public static byte[] BIG_BUFFER_DATA;
-        public static byte[] HUGE_BUFFER_DATA;
+        public static byte[] MID_BUFFER;
+        public static byte[] LARGE_BUFFER;
 
         static TestData()
         {
-            BIG_BUFFER_DATA = new byte[30000];
+            MID_BUFFER = new byte[30000];
             Random rnd = new Random();
-            rnd.NextBytes(BIG_BUFFER_DATA);
-            HUGE_BUFFER_DATA = new byte[Int16.MaxValue * 4];
-            rnd.NextBytes(HUGE_BUFFER_DATA);
+            rnd.NextBytes(MID_BUFFER);
+            LARGE_BUFFER = new byte[Int16.MaxValue * 4];
+            rnd.NextBytes(LARGE_BUFFER);
         }
 
         public static NetworkBuffer GetDummyStream()
@@ -27,9 +27,9 @@ namespace JordanSdk.Network.Tcp.Tests
             return new NetworkBuffer(helloWorld.Length, helloWorld);
         }
 
-        public static NetworkBuffer GetHugeStream() => new NetworkBuffer(TestData.HUGE_BUFFER_DATA.Length, TestData.HUGE_BUFFER_DATA);
+        public static NetworkBuffer GetMidSizeBuffer() => new NetworkBuffer(TestData.LARGE_BUFFER.Length, TestData.LARGE_BUFFER);
 
 
-        public static NetworkBuffer GetBigStream() => new NetworkBuffer(TestData.BIG_BUFFER_DATA.Length, TestData.BIG_BUFFER_DATA);
+        public static NetworkBuffer GetLargeBuffer() => new NetworkBuffer(TestData.MID_BUFFER.Length, TestData.MID_BUFFER);
     }
 }
