@@ -36,5 +36,6 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Remove="DataReceivedDelegate.cs" />
+    <Compile Remove="Helpers\AsyncTupleState.cs" />
   </ItemGroup>
 </Project>

@@ -6,18 +6,21 @@ using System.Net.Sockets;
 using System.Threading;
 using System.Collections.Concurrent;
 using JordanSdk.Network.Core;
+using System.Linq;
 
 namespace JordanSdk.Network.Udp
 {
     /// <summary>
-    /// This class is the TCP Implementation of IProtocol, and simplifies TCP network management for all possible operations such as listening and accepting incoming connections, connecting as a client to a remote server and much more.
+    /// This class is the UDP connection-less implementation of IProtocol, and simplifies UDP network management for all possible operations such as listening and accepting incoming connections, connecting as a client to a remote server and much more.
     /// </summary>
     public class UdpProtocol : IProtocol<UdpSocket>, IDisposable
     {
         #region Private Fields
 
-        private ConcurrentDictionary<string, ISocket> csockets = new ConcurrentDictionary<string, ISocket>();
-        CancellationTokenSource listenerManager = null;
+        private ConcurrentDictionary<RandomId, UdpSocket> csockets = new ConcurrentDictionary<RandomId, UdpSocket>();
+        private Socket listener;
+        private IPEndPoint _localEndpoint;
+        private IPEndPoint _remoteEndpoint;
 
         #endregion
 
@@ -26,7 +29,7 @@ namespace JordanSdk.Network.Udp
         /// <summary>
         /// Internal constant used for optimizing read/write network buffer size.
         /// </summary>
-        internal const int BUFFER_SIZE = 8192;
+        public const int BUFFER_SIZE = 8192;
 
         /// <summary>
         /// Internal constant used for specifying the amount of time in milliseconds a send operation times out. (set to one minute)
@@ -48,40 +51,32 @@ namespace JordanSdk.Network.Udp
         /// </summary>
         public bool Listening { get; private set; } = false;
 
-        /// <summary>
-        /// This property specifies the kind of IP version to be used for listening.
-        /// </summary>
-        public IPAddressKind IPAddressKind { get; set; } = IPAddressKind.IPV4;
-
 
         /// <summary>
-        /// Use this property to specify the port to start listening on.
+        /// Use this property to specify the port bind to for listening, or connecting to a remote server. This field is required for either kind of socket to be created (server/client).
         /// </summary>
         public int Port { get; set; }
 
+        /// <summary>
+        /// Use this property for specifying the local Interface to bind to either for server or client connections. Defaults to IPV4, Any IP address (0.0.0.0).
+        /// Examples: IPV4 Local Host - '127.0.0.1', IPV6 Local Host - '::1'
+        /// </summary>
+        public string Address { get; set; } = "0.0.0.0";
 
         /// <summary>
-        ///This property is used for connecting to a remote server, or restrict the IP address (TCP-UDP)/URL(WebSockets - Others) the server will bind to.
+        /// TBD
         /// </summary>
-        public string Address { get; set; }
+        public bool EnableNatTraversal { get; set; } = false;
 
         #endregion
 
-        #region Private Properties
-        private Socket Listener { get; set; }
-
-        private ManualResetEventSlim ResetEvent { get; set; } = new ManualResetEventSlim(false);
-
-        private IPEndPoint Endpoint { get; set; }
-
-        #endregion
 
         #region Events
 
         /// <summary>
         /// This event is invoked when a client attempts to establish a socket connection in order to give an opportunity to the protocol owner to accept or reject the connection.
         /// </summary>
-        public event UserConnectedDelegate OnConnectionRequested;
+        public event SocketConnectedDelegate OnConnectionRequested;
 
         #endregion
 
@@ -92,12 +87,14 @@ namespace JordanSdk.Network.Udp
         /// </summary>
         public void Listen()
         {
-            if (IPAddressKind == IPAddressKind.IPV4)
-                SetupIPV4();
+            if (Listening)
+                return;
+            _localEndpoint = new IPEndPoint(IPAddress.Parse(Address), Port);
+            if (_localEndpoint.AddressFamily == AddressFamily.InterNetwork)
+                SetupIPV4(_localEndpoint, out listener);
             else
-                SetupIPV6();
-
-            StartListening();
+                SetupIPV6(_localEndpoint, out listener);
+            StartListening(listener);
         }
 
         /// <summary>
@@ -105,62 +102,81 @@ namespace JordanSdk.Network.Udp
         /// </summary>
         public void StopListening()
         {
-            if(listenerManager != null && !listenerManager.IsCancellationRequested)
-            {
-                Listening = false;
-                ReleaseClients();
-                ResetEvent.Reset(); //Releases the thread
-                try
-                {
-                    listenerManager.Cancel(false);
-                }
-                catch (Exception) { }
-                {
-                    
-                }
-                Listener?.Close();
-                Listener?.Dispose();
-                Listener = null;
-            }
+            Listening = false;
+            ReleaseClients();
+            listener?.Shutdown(SocketShutdown.Both);
+            listener?.Close();
+            listener?.Dispose();
+            listener = null;
         }
 
 
         /// <summary>
         /// Initiates an asynchronous connection to a remote server.
         /// </summary>
+        /// <param name="remoteIp">Remote server IP address to connect to.</param>
+        /// <param name="remotePort">Remote server IP port to connect to.</param>
         /// <returns>Returns an instance of TCP Socket</returns>
-        public async Task<UdpSocket> ConnectAsync()
+        public async Task<UdpSocket> ConnectAsync(string remoteIp, int remotePort)
         {
-            var endPoint = new IPEndPoint(IPAddress.Parse(Address ?? "127.0.0.1"), Port);
-            var socket = new Socket(endPoint.AddressFamily, SocketType.Dgram, ProtocolType.Udp);
-            return await SetupClientToken(socket, endPoint);
+            var remoteEndPoint = new IPEndPoint(IPAddress.Parse(remoteIp), remotePort);
+            _localEndpoint = new IPEndPoint(IPAddress.Parse(Address ?? (remoteEndPoint.AddressFamily == AddressFamily.InterNetwork ? "127.0.0.1" : "::1")), Port);
+            Socket socket;
+            if (_localEndpoint.AddressFamily == AddressFamily.InterNetwork)
+                SetupIPV4(_localEndpoint, out socket);
+            else
+                SetupIPV6(_localEndpoint, out socket);
+            return await SetupClientToken(socket, remoteEndPoint);
         }
 
         /// <summary>
         /// Initiates an asynchronous connection to a remote server, calling callback once the connection is established.
+        /// <param name="callback">Callback invoked once the connection is established.</param>
+        /// <param name="remoteIp">Remote server IP address to connect to.</param>
+        /// <param name="remotePort">Remote server IP port to connect to.</param>
         /// </summary>
         /// <returns>Returns an instance of TCP Socket</returns>
-        public async void ConnectAsync(Action<UdpSocket> callback)
+        public void ConnectAsync(Action<UdpSocket> callback, string remoteIp, int remotePort)
         {
-            var endPoint = new IPEndPoint(IPAddress.Parse(Address ?? "127.0.0.1"), Port);
-            var socket = new Socket(endPoint.AddressFamily, SocketType.Dgram, ProtocolType.Udp);
-            var result = await SetupClientToken(socket, endPoint);
-            if (result != null)
-                callback?.Invoke(result);
+            Task.Run(async () =>
+            {
+                var remoteEndPoint = new IPEndPoint(IPAddress.Parse(remoteIp), remotePort);
+                _localEndpoint = new IPEndPoint(IPAddress.Parse(Address ?? (remoteEndPoint.AddressFamily == AddressFamily.InterNetwork ? "127.0.0.1" : "::1")), Port);
+
+                Socket socket;
+                if (_localEndpoint.AddressFamily == AddressFamily.InterNetwork)
+                    SetupIPV4(_localEndpoint, out socket);
+                else
+                    SetupIPV6(_localEndpoint, out socket);
+                var result = await SetupClientToken(socket, remoteEndPoint);
+                if (result != null)
+                    callback?.Invoke(result);
+
+            });
         }
 
         /// <summary>
         /// Initiates a synchronous connection to a remote server.
+        /// <param name="remoteIp">Remote server IP address to connect to.</param>
+        /// <param name="remotePort">Remote server IP port to connect to.</param>
         /// </summary>
         /// <returns>Returns an instance of TCP Socket</returns>
-        public UdpSocket Connect()
+        public UdpSocket Connect(string remoteIp, int remotePort)
         {
-            var endPoint = new IPEndPoint(IPAddress.Parse(Address ?? "127.0.0.1"), Port);
-            var socket = new Socket(endPoint.AddressFamily, SocketType.Dgram, ProtocolType.Udp);
-            var result = SetupClientToken(socket, endPoint).Result;
+            var remoteEndPoint = new IPEndPoint(IPAddress.Parse(remoteIp), remotePort);
+            _localEndpoint = new IPEndPoint(IPAddress.Parse(string.IsNullOrWhiteSpace(Address) ? (remoteEndPoint.AddressFamily == AddressFamily.InterNetwork ? "127.0.0.1" : "::1") : Address), Port);
+            Socket socket;
+            if (_localEndpoint.AddressFamily == AddressFamily.InterNetwork)
+                SetupIPV4(_localEndpoint, out socket);
+            else
+                SetupIPV6(_localEndpoint, out socket);
+            var result = SetupClientToken(socket, remoteEndPoint).Result;
             return result;
         }
 
+        /// <summary>
+        /// Releases allocated resources.
+        /// </summary>
         public void Dispose()
         {
             Dispose(true);
@@ -172,7 +188,8 @@ namespace JordanSdk.Network.Udp
 
         private void ReleaseClients()
         {
-            Parallel.ForEach(csockets.Values,(socket)=>{
+            Parallel.ForEach(csockets.Values, (socket) =>
+            {
                 try
                 {
                     socket.Disconnect();
@@ -181,115 +198,114 @@ namespace JordanSdk.Network.Udp
             });
         }
 
-        private void SetupIPV4()
+        private void SetupIPV4(IPEndPoint endPoint, out Socket socket)
         {
-            if(string.IsNullOrWhiteSpace(Address))
-                Endpoint = new IPEndPoint(IPAddress.Any, Port);
-            else
-                Endpoint = new IPEndPoint(IPAddress.Parse(Address), Port);
-
-            Listener = new Socket(AddressFamily.InterNetwork,
+            socket = new Socket(AddressFamily.InterNetwork,
                 SocketType.Dgram, ProtocolType.Udp);
-            SetupCommonListenerFields();
+            SetupCommonFields(socket);
+            socket.Bind(endPoint);
         }
 
-        private void SetupIPV6()
+        private void SetupIPV6(IPEndPoint endPoint, out Socket socket)
         {
-            if(string.IsNullOrWhiteSpace(Address))
-                Endpoint = new IPEndPoint(IPAddress.IPv6Any, Port);
-            else
-                Endpoint = new IPEndPoint(IPAddress.Parse(Address), Port);
-
-            Listener = new Socket(AddressFamily.InterNetworkV6,
+            socket = new Socket(AddressFamily.InterNetworkV6,
                SocketType.Dgram, ProtocolType.Udp);
-            Listener.SetSocketOption(SocketOptionLevel.IPv6, (SocketOptionName)27, false);
-            SetupCommonListenerFields();
+            socket.SetSocketOption(SocketOptionLevel.IPv6, (SocketOptionName)27, false);
+            SetupCommonFields(socket);
+            socket.Bind(endPoint);
         }
 
-        private void SetupCommonListenerFields()
+        private void SetupCommonFields(Socket socket)
         {
-            Listener.Ttl = 255;
-            Listener.SendBufferSize = BUFFER_SIZE;
-            Listener.ReceiveBufferSize = BUFFER_SIZE;
-            Listener.SendTimeout = SEND_TIMEOUT;
-            Listener.ReceiveTimeout = RECEIVE_TIMEOUT;
-            Listener.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.ReuseAddress, true);
-            Listener.SetIPProtectionLevel(IPProtectionLevel.Unrestricted);
+            socket.Ttl = 255;
+            socket.SendBufferSize = BUFFER_SIZE;
+            socket.ReceiveBufferSize = BUFFER_SIZE;
+            socket.SendTimeout = SEND_TIMEOUT;
+            socket.ReceiveTimeout = RECEIVE_TIMEOUT;
+            socket.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.ReuseAddress, true);
+            socket.SetIPProtectionLevel(IPProtectionLevel.Unrestricted);
+            //socket.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.Debug, true);
         }
 
-        private void StartListening()
+        private void StartListening(Socket listener)
         {
             if (Listening)
                 return;
             Listening = true;
-            Listener.Bind(Endpoint);
-            listenerManager = new CancellationTokenSource();
-            var throwAway = Task.Run(() =>
+            byte[] connectData = new byte[BUFFER_SIZE];
+            EndPoint endPoint = new IPEndPoint(_localEndpoint.AddressFamily == AddressFamily.InterNetwork ? IPAddress.Any : IPAddress.IPv6Any, Port);
+            listener.BeginReceiveFrom(connectData, 0, BUFFER_SIZE, 0, ref endPoint, new AsyncCallback(AcceptConnection), new AsyncState()
             {
-                try
-                {
-                    while (Listening)
-                    {
-                        byte[] connectData = new byte[1];
-                        EndPoint endPoint = new IPEndPoint(Endpoint.Address, Endpoint.Port);
-                        Listener.BeginReceiveFrom(connectData, 0, 1, 0, ref endPoint, new AsyncCallback(AcceptConnection), new AsyncTupleState<Socket, IPEndPoint>()
-                        {
-                            State = Listener,
-                            Data = endPoint as IPEndPoint
-                        });
-                        ResetEvent.Wait();
-                        ResetEvent.Reset();
-                    }
-                }
-                catch (ThreadAbortException) { }
-            }, listenerManager.Token);
+                Socket = listener,
+            });
         }
 
         private void AcceptConnection(IAsyncResult ar)
         {
-
+            UdpSocket client = null;
             bool succeed = false;
-            AsyncTupleState<Socket,IPEndPoint> asyncState = ar.AsyncState as AsyncTupleState<Socket, IPEndPoint>;
-            EndPoint endPoint = asyncState.Data as EndPoint;
+            AsyncState asyncState = ar.AsyncState as AsyncState;
+            bool shoudContinue = asyncState.Socket.IsBound;
+            if (!shoudContinue || !Listening)
+                return;
+            EndPoint senderIp = new IPEndPoint(IPAddress.Any, 0);
             try
             {
-                
-                int? count = asyncState.State?.EndReceiveFrom(ar,ref endPoint);
-                succeed = count.HasValue && count == 1;
+
+                int? count = asyncState.Socket?.EndReceiveFrom(ar, ref senderIp);
+                var existing = csockets.Values.FirstOrDefault(p => p.RemoteEndPoint == senderIp);
+                if (existing == null && count == 1)
+                    succeed = CollectSocket(senderIp as IPEndPoint, out client);
+                else
+                    Diagnostic.DiagnosticCenter.Instance.Log?.LogException(new ArgumentException(succeed ? "Unable to setup the client connection request." : "UDP Connection request should be one byte long"));
             }
-            catch (ObjectDisposedException) { }
-            catch (Exception ex) {
-                Diagnostic.DiagnosticCenter.Instance.Log?.LogException<Exception>(ex);
-            }
-            finally
+            catch (ObjectDisposedException)
             {
-                ResetEvent?.Set();
-            }
-            try
-            {
-                if (succeed)
-                    CollectSocket(asyncState.State, endPoint as IPEndPoint);
             }
             catch (Exception ex)
             {
-                Diagnostic.DiagnosticCenter.Instance.Log?.LogException<Exception>(ex);
+                Diagnostic.DiagnosticCenter.Instance.Log?.LogException(ex);
+            }
+            finally
+            {
+                byte[] dummy = new byte[1];
+                EndPoint endPoint = new IPEndPoint(_localEndpoint.AddressFamily == AddressFamily.InterNetwork ? IPAddress.Any : IPAddress.IPv6Any, Port);
+                listener.BeginReceiveFrom(dummy, 0, dummy.Length, 0, ref endPoint, new AsyncCallback(AcceptConnection), new AsyncState() { Socket = listener });
+            }
+            if (succeed)
+                OnConnectionRequested?.Invoke(client);
+            else
+                Diagnostic.DiagnosticCenter.Instance.Log?.LogException(new ArgumentException(succeed ? "Unable to setup the client connection request." : "UDP Connection request should be one byte long"));
+        }
+
+
+        private bool CollectSocket(IPEndPoint endPoint, out UdpSocket isocket)
+        {
+            Socket socket;
+            if (_localEndpoint.AddressFamily == AddressFamily.InterNetwork)
+                SetupIPV4(endPoint, out socket);
+            else
+                SetupIPV6(endPoint, out socket);
+            isocket = new UdpSocket(socket, endPoint, RandomId.Generate());
+            while (!csockets.TryAdd(isocket.Id, isocket))
+                isocket = new UdpSocket(socket, endPoint, RandomId.Generate());
+            isocket.OnSocketDisconnected += RemoveSocket;
+            isocket.Connected = true;
+            try
+            {
+                SendServerToken(isocket);
+                return true;
+            }
+            catch (Exception ex)
+            {
+                return false;
             }
         }
 
-       
-        private void CollectSocket(Socket socket, IPEndPoint endPoint)
-        {
-            ISocket isocket = new UdpSocket(socket, endPoint, Guid.NewGuid().ToString("N"));
-            while (!csockets.TryAdd(isocket.Token, isocket))
-                isocket = new UdpSocket(socket, endPoint, Guid.NewGuid().ToString("N"));
-            isocket.OnSocketDisconnected += RemoveSocket;
-            SendServerToken(isocket);
-            OnConnectionRequested?.Invoke(isocket);
-        }
         private void RemoveSocket(ISocket socket)
         {
-            ISocket isocket;
-            if(csockets.TryRemove(socket.Token,out isocket))
+            UdpSocket isocket;
+            if (csockets.TryRemove(socket.Id, out isocket))
                 isocket.OnSocketDisconnected -= RemoveSocket;
         }
 
@@ -301,90 +317,56 @@ namespace JordanSdk.Network.Udp
         {
             if (!disposedValue)
             {
-                if(disposing && Listening)
-                        StopListening();
-
-                listenerManager?.Dispose();
-                listenerManager = null;
+                if (disposing && Listening)
+                    StopListening();
                 disposedValue = true;
             }
         }
 
-        ~UdpProtocol() {
+        ~UdpProtocol()
+        {
             Dispose(false);
         }
 
-        
-
         #endregion
+
+        private static void SendServerToken(UdpSocket socket)
+        {
+            var throwAway = socket.SendAsync(socket.Id.ToArray());
+        }
 
         private static async Task<UdpSocket> SetupClientToken(Socket socket, EndPoint endPoint)
         {
-
             byte[] buffer = new byte[BUFFER_SIZE];
             UdpSocket result = null;
-            SocketError error;
-            TaskCompletionSource<bool> task = new TaskCompletionSource<bool>();
-            socket.BeginSendTo(new byte[] { 1 }, 0, 1, 0, endPoint, (state) =>
+            TaskCompletionSource<bool> sendTask = new TaskCompletionSource<bool>();
+            socket.BeginReceiveFrom(buffer, 0, BUFFER_SIZE, 0, ref endPoint, (ar) =>
             {
-                var asyncState = state.AsyncState as AsyncState<Socket>;
-                int sent = asyncState.State.EndSendTo(state);
-                if (sent == 1)
-                    task.SetResult(true);
-                else
-                    task.SetResult(false);
-            }, new AsyncState<Socket>() { CallBack = task, State = socket });
-
-            if(await task.Task)
-            {
-                task = new TaskCompletionSource<bool>();
-                socket.BeginReceiveFrom(buffer, 0, BUFFER_SIZE, 0, ref endPoint, (state) =>
+                int count = socket.EndReceiveFrom(ar, ref endPoint);
+                if (count > 0)
                 {
-                    int received = socket.EndReceiveFrom(state,ref endPoint);
-                    if (received > 0)
-                    {
-                        byte[] tokenBytes = new byte[received];
-                        Array.ConstrainedCopy(buffer, 0, tokenBytes, 0, received);
-                        result = new UdpSocket(socket, endPoint as IPEndPoint, Encoding.ASCII.GetString(tokenBytes)) { Connected = true };
-                        task.SetResult(true);
-                    }
-                    else
-                        task.SetResult(false);
-
-                }, socket);
-                await task.Task;
-            }
+                    byte[] received = new byte[count];
+                    Array.Copy(buffer, 0, received, 0, count);
+                    result = new UdpSocket(socket, endPoint as IPEndPoint, new RandomId(received)) { Connected = true };
+                    sendTask.SetResult(true);
+                }
+                else
+                    sendTask.SetResult(false);
+            }, null);
+            socket.BeginSendTo(new byte[] { 1 }, 0, 1, 0, endPoint, (ar) =>
+            {
+                int sent = socket.EndSendTo(ar);
+            }, null);
+            
+            await Task.WhenAny(sendTask.Task, Task.Delay(10000));
             return result;
         }
 
-        private static void SendServerToken(ISocket socket)
-        {
-            byte[] token = Encoding.ASCII.GetBytes(socket.Token);
-            using(NetworkBuffer buffer = new NetworkBuffer(token.Length, token))
-            {
-                socket.Send(buffer);
-            }
-        }
 
-        //private static void AsyncConnectCallback(IAsyncResult ar)
-        //{
-        //    AsyncState<Socket> state = ar.AsyncState as AsyncState<Socket>;
-        //    try
-        //    {
-        //        state.State.EndConnect(ar);
-        //        if (state.CallBack != null && state.CallBack is Action<UdpSocket>)
-        //            (state.CallBack as Action<UdpSocket>).Invoke(SetupClientToken(state.State));
-        //        else if (state.CallBack != null && state.CallBack is TaskCompletionSource<UdpSocket>)
-        //            (state.CallBack as TaskCompletionSource<UdpSocket>).SetResult(SetupClientToken(state.State));
-        //    }
-        //    catch (Exception ex)
-        //    {
-        //        if (ar.AsyncState is TaskCompletionSource<UdpSocket>)
-        //            (ar.AsyncState as TaskCompletionSource<UdpSocket>).SetException(ex);
-        //        else
-        //            throw ex;
-        //    }
-        //}
+        public void GetDiagnostics()
+        {
+            var data = listener.GetSocketOption(SocketOptionLevel.Socket, SocketOptionName.Debug);
+        }
 
         #endregion
     }

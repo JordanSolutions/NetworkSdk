@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Security.Cryptography;
 using System.Text;
 
 namespace JordanSdk.Network.Core
@@ -9,7 +10,7 @@ namespace JordanSdk.Network.Core
     /// <summary>
     /// The network buffer class is a simple implementation of the INetwork Buffer contract, and provides Read and Write access to an array of bytes used for sending or receiving network packages.
     /// While you can initiate a network buffer with just the intended size, and write bytes to the buffer, is not until all bytes are written that the buffer becomes readable, with the exception of
-    /// GetBufer function that will return all bytes written regardless. Reading from the buffer is forward only, to start reading from the beginning of the buffer again, you will need to call Reset Position.
+    /// 'ToArray' function that will return all bytes written regardless. Reading from the buffer is forward only, to start reading from the beginning of the buffer again, you will need to call 'ResetPosition' function.
     /// </summary>
     public class NetworkBuffer : INetworkBuffer, IDisposable
     {
@@ -24,9 +25,9 @@ namespace JordanSdk.Network.Core
         #region Constructor
 
         /// <summary>
-        /// Initializes an empty buffer.
+        /// Initializes an empty buffer with the specified size.
         /// </summary>
-        /// <param name="size"></param>
+        /// <param name="size">Size of the buffer.</param>
         public NetworkBuffer(int size)
         {
             if (size < 0)
@@ -37,10 +38,10 @@ namespace JordanSdk.Network.Core
         }
 
         /// <summary>
-        /// Initializes a buffer and copies the array provided.
+        /// Initializes a buffer with the specified size, and copies the array provided into the buffer.
         /// </summary>
-        /// <param name="size"></param>
-        /// <param name="initialData"></param>
+        /// <param name="size">Size of the buffer.</param>
+        /// <param name="initialData">Array not larger than size.</param>
         public NetworkBuffer(int size, byte[] initialData)
         {
             if (size <= 0)
@@ -53,8 +54,20 @@ namespace JordanSdk.Network.Core
                 buffer = new MemoryStream(size);
                 buffer.Write(initialData, 0, initialData.Length);
             }
-                received = initialData.Length;
+            received = initialData.Length;
+        }
 
+
+        /// <summary>
+        /// Initializes an empty buffer using the provided memory stream.
+        /// </summary>
+        /// <param name="data"></param>
+        public NetworkBuffer(MemoryStream data)
+        {
+            data.Position = 0;
+            this.size = (int)data.Length;
+            received = (int)data.Length;
+            buffer = data;
         }
 
         /// <summary>
@@ -65,7 +78,7 @@ namespace JordanSdk.Network.Core
         {
             this.size = instance.Size;
             this.received = instance.Received;
-            buffer = new MemoryStream(instance.GetBuffer());
+            buffer = new MemoryStream(instance.ToArray());
         }
 
         #endregion
@@ -105,11 +118,14 @@ namespace JordanSdk.Network.Core
         }
 
         /// <summary>
-        /// When overwritten in a derived class, Copies a byte array starting from source position (element index in data), and containing the amount of elements specified in source size. When source size is not specified (null) the reminder of position and size of the array will be used as size.
+        /// Copies a byte array starting from source position (element index in data), and containing the amount of elements specified in source size. When source size is not specified (null) the reminder of position and size of the array will be used as size.
         /// </summary>
         /// <param name="data">Array to copy into buffer.</param>
         /// <param name="position">Element position in data to start copying from.</param>
         /// <param name="size">Optional size of the elements to copy from data.</param>
+        /// <exception cref="ObjectDisposedException">This exception is thrown when the network buffer has been disposed.</exception>
+        /// <exception cref="ArgumentNullException">This exception is thrown when data is null or its length is zero.</exception>
+        /// <exception cref="ArgumentOutOfRangeException">This exception is thrown when the amount of bytes to be copied into buffer exceeds the remaining bytes available to be written in buffer.</exception>
         public void AppendConstrained(byte[] data, uint position = 0, uint? size = null)
         {
             if (disposedValue)
@@ -129,10 +145,11 @@ namespace JordanSdk.Network.Core
         }
 
         /// <summary>
-        /// returns an array containing received bytes.
+        /// Returns an array containing all received bytes.
         /// </summary>
-        /// <returns>Returns a copy of the buffer array.</returns>
-        public byte[] GetBuffer()
+        /// <exception cref="ObjectDisposedException">This exception is thrown when the network buffer has been disposed.</exception>
+        /// <returns>Array of bytes.</returns>
+        public byte[] ToArray()
         {
             if (disposedValue)
                 throw new ObjectDisposedException("This buffer has been disposed.");
@@ -149,6 +166,7 @@ namespace JordanSdk.Network.Core
         /// Reads from buffer the number of bytes specified by length, starting from buffer current position. Returned array size will be constrained to the remaining bytes to be read, when length exceeds the size of remaining bytes.
         /// </summary>
         /// <param name="length">Maximum number of bytes to read from buffer.</param>
+        /// <exception cref="ObjectDisposedException">This exception is thrown when the network buffer has been disposed.</exception>
         /// <returns>Returns an array with data from buffer and size not larger than length. Array size will be constrained to the amount of bytes remaining to be read, or length.</returns>
         public byte[] Read(int length)
         {
@@ -170,6 +188,8 @@ namespace JordanSdk.Network.Core
         /// <summary>
         /// Resets buffer current position to zero. 
         /// </summary>
+        /// <exception cref="ObjectDisposedException">This exception is thrown when the network buffer has been disposed.</exception>
+        /// <exception cref="InvalidOperationException">This exception is thrown when the buffer is incomplete, the position of the buffer can not be changed until all bytes have been written.</exception>
         public void ResetPosition()
         {
             if (disposedValue)
@@ -178,7 +198,7 @@ namespace JordanSdk.Network.Core
             lock (locker)
             {
                 if (!Completed)
-                    throw new Exception("Not all bytes has been written into buffer, until this occurs reading or modifying the position of the buffer is not allowed. If your intentions are not to continue writing to buffer, resize the buffer to the same size or less than Received Property( Buffer.Resize(Buffer.Received)).");
+                    throw new InvalidOperationException("Not all bytes has been written into buffer, until this occurs reading or modifying the position of the buffer is not allowed. If your intentions are not to continue writing to buffer, resize the buffer to the same size or less than Received Property( Buffer.Resize(Buffer.Received)).");
                 buffer.Position = 0;
             }
         }
@@ -189,6 +209,7 @@ namespace JordanSdk.Network.Core
         /// When new size is larger than original, the buffer is extended without requiring bytes to be transfered to a new array.
         /// </summary>
         /// <param name="newSize">New buffer size.</param>
+        /// <exception cref="ObjectDisposedException">This exception is thrown when the network buffer has been disposed.</exception>
         public void Resize(int newSize)
         {
             if (disposedValue)
@@ -210,7 +231,36 @@ namespace JordanSdk.Network.Core
             }
         }
 
+
+        /// <summary>
+        /// Use this function to get the checksum of the data stored in buffer. Note that this will only include written data, is advice to call this function only when all data has been written.
+        /// </summary>
+        /// <exception cref="ObjectDisposedException">This exception is thrown when the network buffer has been disposed.</exception>
+        /// <returns>A byte array with 16 elements containing the checksum of the stored data.</returns>
+        public byte[] GetChecksum()
+        {
+            if (disposedValue)
+                throw new ObjectDisposedException("This buffer has been disposed.");
+            using (MD5 hashCreator = MD5.Create())
+                return hashCreator.ComputeHash(buffer.ToArray());
+        }
+
+        /// <summary>
+        /// Use this function to creating a duplicate of the network buffer.
+        /// </summary>
+        /// <exception cref="ObjectDisposedException">This exception is thrown when the network buffer has been disposed.</exception>
+        /// <returns>Returns a network buffer containing a copy of the original.</returns>
+        public INetworkBuffer Clone()
+        {
+            if (disposedValue)
+                throw new ObjectDisposedException("This buffer has been disposed.");
+
+            return new NetworkBuffer(this);
+        }
+
+
         #region IDisposable Support
+
         private bool disposedValue = false; // To detect redundant calls
 
         protected virtual void Dispose(bool disposing)
@@ -221,36 +271,18 @@ namespace JordanSdk.Network.Core
                 {
                     buffer.Dispose();
                 }
-
-                // TODO: free unmanaged resources (unmanaged objects) and override a finalizer below.
-                // TODO: set large fields to null.
-
                 disposedValue = true;
             }
         }
 
-        // TODO: override a finalizer only if Dispose(bool disposing) above has code to free unmanaged resources.
-        // ~NetworkBuffer() {
-        //   // Do not change this code. Put cleanup code in Dispose(bool disposing) above.
-        //   Dispose(false);
-        // }
-
-        // This code added to correctly implement the disposable pattern.
+        /// <summary>
+        /// Release all resources allocated.
+        /// </summary>
         public void Dispose()
         {
-            // Do not change this code. Put cleanup code in Dispose(bool disposing) above.
             Dispose(true);
-            // TODO: uncomment the following line if the finalizer is overridden above.
-            // GC.SuppressFinalize(this);
         }
 
-        public INetworkBuffer Clone()
-        {
-            if (disposedValue)
-                throw new ObjectDisposedException("This buffer has been disposed.");
-
-            return new NetworkBuffer(this);
-        }
         #endregion
     }
 }

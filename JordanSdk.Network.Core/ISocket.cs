@@ -1,76 +1,76 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Text;
-using System.Threading;
-//By Erik Jordan January 9, 2018, Simplified and modernized from original 2008 source code, also by Erik Jordan
-
+﻿//By Erik Jordan January 9, 2018, Simplified and modernized from my original 2006 source code.
+using System;
 using System.Threading.Tasks;
 namespace JordanSdk.Network.Core
 {
+    /// <summary>
+    /// This interface provides contracts that simplifies sending and receiving data through the network.
+    /// </summary>
     public interface ISocket
     {
-
-        string Token { get; }
+        /// <summary>
+        /// Unique identifier assigned by the server.
+        /// </summary>
+        RandomId Id { get; }
 
         /// <summary>
-        /// Event invoked when the connection is lost or purposely closed.
+        /// Event invoked when the connection is lost or closed.
         /// </summary>
         event DisconnectedDelegate OnSocketDisconnected;
 
         /// <summary>
-        /// When overwritten in a derived class, initiates an asynchronous network read operation that will conclude by invoking callback.
+        /// Use this function to receive data from the network asynchronously. This function will invoke the provided action once data is received. 
         /// </summary>
-        /// <param name="callback">Callback to be invoked when the received operation concludes.</param>
-        void ReceiveAsync(Action<INetworkBuffer> callback);
+        /// <param name="callback">Callback to be invoked when data is received.</param>
+        void ReceiveAsync(Action<byte[]> callback);
 
         /// <summary>
-        /// When overwritten in a derived class, initiates an awaitable asynchronous network read.
+        /// Use this Task oriented function to receive data from the network asynchronously.
         /// </summary>
         /// <returns>Returns an INetworkBuffer object with data received.</returns>
-        Task<INetworkBuffer> ReceiveAsync();
+        Task<byte[]> ReceiveAsync();
 
         /// <summary>
-        /// When overwritten in a derived class, blocks until data is received.
+        /// Use this function to receive data from the network synchronously. This function blocks until data is received or until underlying socket receive time out.
         /// </summary>
         /// <returns>Returns a Network Buffer with the data received.</returns>
-        INetworkBuffer Receive();
+        byte[] Receive();
 
         /// <summary>
-        /// When overwritten in a derived class, initiates an awaitable asynchronous network write operation.
+        /// Use this Task oriented function to send data over the network asynchronously.
         /// </summary>
         /// <param name="data">Data to be written to the network.</param>
         /// <returns>Returns the amount of bytes written to the network.</returns>
-        Task<int> SendAsync(INetworkBuffer data);
+        Task<int> SendAsync(byte[] data);
 
         /// <summary>
-        /// When overwritten in a derived class, writes data to the network and calls callback once the write operation concludes.
+        /// Use this function to send data over the network asynchronously. This method will invoke the provided action once the operation completes.
         /// </summary>
         /// <param name="data">INetworkBuffer containing the data to be sent.</param>
-        /// <param name="callback">Callback invoked once the write operation concludes.</param>
-        void SendAsync(INetworkBuffer data, Action<int> callback);
+        /// <param name="callback">Callback invoked once the write operation concludes, containing the amount of bytes sent through the network.</param>
+        void SendAsync(byte[] data, Action<int> callback);
 
         /// <summary>
-        /// When overwritten in a derived class, blocks until all data in buffer is sent.
+        /// Use this function to send a buffer over the network. This method blocks until all data in buffer is sent or until underlying socket receive time out.
         /// </summary>
         /// <param name="data">Data to be written to the network.</param>
-        /// <returns>Returns the amount of bytes written.</returns>
-        int Send(INetworkBuffer data);
+        /// <returns>Returns the amount of bytes sent.</returns>
+        int Send(byte[] data);
 
         /// <summary>
-        /// When overwritten in a derived class, this awaitable function disconnects the socket connection.
+        /// Disconnects the socket asynchronously.
         /// </summary>
-        /// <returns>An awaitable class.</returns>
+        /// <returns>Returns a Task that can be used to wait for the operation to complete.</returns>
         Task DisconnectAsync();
 
         /// <summary>
-        /// When overwritten in a derived class, this awaitable function disconnects the socket connection.
+        /// Use this function to disconnect the socket asynchronously. Once the operation succeeds, the provided callback will be invoked.
         /// </summary>
         /// <param name="callback">Callback invoked when the socket is disconnected.</param>
-        /// <returns>An awaitable class.</returns>
         void DisconnectAsync(Action callback);
 
         /// <summary>
-        /// When overwritten in a derived class, disconnects the socket blocking until the operation completes.
+        /// Disconnects the socket blocking until the operation completes.
         /// </summary>
         void Disconnect();
 
