@@ -10,16 +10,14 @@ using JordanSdk.Network.Core;
 namespace JordanSdk.Network.Tcp
 {
     /// <summary>
-    /// This class is the TCP Implementation of IProtocol, and simplifies TCP network management for all possible operations such as listening and accepting incoming connections, connecting as a client to a remote server and much more.
+    /// This class is the TCP Implementation of IProtocol, and simplifies connection oriented network management for all possible operations such as listening, accepting incoming connections, and connecting as a client to a remote server.
     /// </summary>
     public class TcpProtocol : IProtocol<TcpSocket>, IDisposable
     {
         #region Private Fields
 
         AcceptConnectionState state = new AcceptConnectionState();
-        private ConcurrentDictionary<string, ISocket> csockets = new ConcurrentDictionary<string, ISocket>();
-        CancellationTokenSource listenerManager = null;
-
+        private ConcurrentDictionary<RandomId, ISocket> csockets = new ConcurrentDictionary<RandomId, ISocket>();
         #endregion
 
         #region Constants
@@ -27,7 +25,7 @@ namespace JordanSdk.Network.Tcp
         /// <summary>
         /// Internal constant used for optimizing read/write network buffer size.
         /// </summary>
-        internal const int BUFFER_SIZE = 8192;
+        public const int BUFFER_SIZE = 8192;
 
         /// <summary>
         /// Internal constant used for specifying the amount of time in milliseconds a send operation times out. (set to one minute)
@@ -45,33 +43,28 @@ namespace JordanSdk.Network.Tcp
         #region Public Properties
 
         /// <summary>
-        /// True when listening for incoming connections.
+        /// True when listening for incoming connections, false otherwise.
         /// </summary>
         public bool Listening { get; private set; } = false;
 
         /// <summary>
-        /// This property specifies the kind of IP version to be used for listening.
-        /// </summary>
-        public IPAddressKind IPAddressKind { get; set; } = IPAddressKind.IPV4;
-
-
-        /// <summary>
-        /// Use this property to specify the port to start listening on.
+        /// Use this property to specify the port to start listening on for incoming connection requests.
         /// </summary>
         public int Port { get; set; }
 
 
         /// <summary>
-        ///This property is used for connecting to a remote server, or restrict the IP address (TCP-UDP)/URL(WebSockets - Others) the server will bind to.
+        /// Use this property to specify the IP/Interface to bind to. Defaults to IPV4, Any IP address (0.0.0.0).
+        /// Examples: IPV4 Local Host - '127.0.0.1', IPV6 Local Host - '::1'
         /// </summary>
-        public string Address { get; set; }
+        public string Address { get; set; } = "0.0.0.0";
 
         #endregion
 
         #region Events
 
         /// <summary>
-        /// This event is invoked when a client attempts to establish a socket connection in order to give an opportunity to the protocol owner to accept or reject the connection.
+        /// This event is invoked when a client attempts to establish a socket connection in order to give an opportunity to the protocol owner to accept (via not doing anything) or reject (via Disconnect) the connection.
         /// </summary>
         public event SocketConnectedDelegate OnConnectionRequested;
 
@@ -84,11 +77,12 @@ namespace JordanSdk.Network.Tcp
         /// </summary>
         public void Listen()
         {
-            if (IPAddressKind == IPAddressKind.IPV4)
-                SetupIPV4();
+            var endPoint = new IPEndPoint(IPAddress.Parse(Address), Port);
+            if (endPoint.AddressFamily == AddressFamily.InterNetwork)
+                SetupIPV4(endPoint);
             else
-                SetupIPV6();
-
+                SetupIPV6(endPoint);
+            state.Listener.Bind(endPoint);
             StartListening();
         }
 
@@ -97,58 +91,65 @@ namespace JordanSdk.Network.Tcp
         /// </summary>
         public void StopListening()
         {
-            if(listenerManager != null && !listenerManager.IsCancellationRequested)
-            {
                 Listening = false;
                 ReleaseClients();
-                state.ResetEvent.Reset(); //Releases the thread
-                try
-                {
-                    listenerManager.Cancel(false);
-                }
-                catch (Exception) { }
-                {
-                    
-                }
-                state.Listener?.Close();
-                state.Listener?.Dispose();
+                state.Listener.Close();
+                state.Listener.Dispose();
                 state.Listener = null;
-            }
         }
-
 
         /// <summary>
         /// Initiates an asynchronous connection to a remote server.
         /// </summary>
+        /// <param name="remoteIp">Remote server IP address to connect to.</param>
+        /// <param name="remotePort">Remote server IP port to connect to.</param>
         /// <returns>Returns an instance of TCP Socket</returns>
-        public async Task<TcpSocket> ConnectAsync()
+        public async Task<TcpSocket> ConnectAsync(string remoteIp, int remotePort)
         {
             var task = new TaskCompletionSource<TcpSocket>();
-            var endPoint = new IPEndPoint(IPAddress.Parse(Address ?? "127.0.0.1"), Port);
+            var endPoint = new IPEndPoint(IPAddress.Parse(remoteIp), remotePort);
             var socket = new Socket(endPoint.AddressFamily, SocketType.Stream, ProtocolType.Tcp);
-            socket.BeginConnect(endPoint, AsyncConnectCallback, new AsyncState<Socket>() { State = socket, CallBack = task });
+            if (endPoint.AddressFamily == AddressFamily.InterNetworkV6)
+                 socket.SetSocketOption(SocketOptionLevel.IPv6, (SocketOptionName)27, false);
+            SetupCommonSocketProperties(socket);
+            socket.BeginConnect(endPoint, AsyncConnectCallback, new AsyncCallbackState<TcpSocket>() { Socket = socket, Callback = (tcpSocket)=>
+            {
+                task.SetResult(tcpSocket);
+            }
+            });
             return await task.Task;
         }
 
         /// <summary>
         /// Initiates an asynchronous connection to a remote server, calling callback once the connection is established.
         /// </summary>
+        /// <param name="callback">Callback invoked once the connection is established.</param>
+        /// <param name="remoteIp">Remote server IP address to connect to.</param>
+        /// <param name="remotePort">Remote server IP port to connect to.</param>
         /// <returns>Returns an instance of TCP Socket</returns>
-        public void ConnectAsync(Action<TcpSocket> callback)
+        public void ConnectAsync(Action<TcpSocket> callback, string remoteIp, int remotePort)
         {
-            var endPoint = new IPEndPoint(IPAddress.Parse(Address ?? "127.0.0.1"), Port);
-            var socket = new Socket(endPoint.AddressFamily, SocketType.Stream, ProtocolType.Tcp);
-            socket.BeginConnect(endPoint, AsyncConnectCallback, new AsyncState<Socket>() { State = socket, CallBack = callback });
+            var remoteEndPoint = new IPEndPoint(IPAddress.Parse(remoteIp), remotePort);
+            var socket = new Socket(remoteEndPoint.AddressFamily, SocketType.Stream, ProtocolType.Tcp);
+            if (remoteEndPoint.AddressFamily == AddressFamily.InterNetworkV6)
+                socket.SetSocketOption(SocketOptionLevel.IPv6, (SocketOptionName)27, false);
+            SetupCommonSocketProperties(socket);
+            socket.BeginConnect(remoteEndPoint, AsyncConnectCallback, new AsyncCallbackState<TcpSocket>() { Socket = socket, Callback = callback });
         }
 
         /// <summary>
         /// Initiates a synchronous connection to a remote server.
         /// </summary>
-        /// <returns>Returns an instance of TCP Socket</returns>
-        public TcpSocket Connect()
+        /// <param name="remoteIp">Remote server IP address to connect to.</param>
+        /// <param name="remotePort">Remote server IP port to connect to.</param>
+        /// <returns>Returns an instance of TCP Socket if the connection succeeds.</returns>
+        public TcpSocket Connect(string remoteIp, int remotePort)
         {
-            var endPoint = new IPEndPoint(IPAddress.Parse(Address ?? "127.0.0.1"), Port);
+            var endPoint = new IPEndPoint(IPAddress.Parse(remoteIp), remotePort);
             var socket = new Socket(endPoint.AddressFamily, SocketType.Stream, ProtocolType.Tcp);
+            if(endPoint.AddressFamily == AddressFamily.InterNetworkV6)
+                 socket.SetSocketOption(SocketOptionLevel.IPv6, (SocketOptionName)27, false);
+            SetupCommonSocketProperties(socket);
             socket.Connect(endPoint);
             return SetupClientToken(socket);
         }
@@ -176,41 +177,32 @@ namespace JordanSdk.Network.Tcp
             });
         }
 
-        private void SetupIPV4()
+        private void SetupIPV4(IPEndPoint endPoint)
         {
-            if(string.IsNullOrWhiteSpace(Address))
-                state.Endpoint = new IPEndPoint(IPAddress.Any, Port);
-            else
-                state.Endpoint = new IPEndPoint(IPAddress.Parse(Address), Port);
-
             state.Listener = new Socket(AddressFamily.InterNetwork,
                 SocketType.Stream, ProtocolType.Tcp);
-            SetupCommonListenerFields();
+            SetupCommonSocketProperties(state.Listener);
+           
         }
 
-        private void SetupIPV6()
+        private void SetupIPV6(IPEndPoint endPoint)
         {
-            if(string.IsNullOrWhiteSpace(Address))
-                state.Endpoint = new IPEndPoint(IPAddress.IPv6Any, Port);
-            else
-                state.Endpoint = new IPEndPoint(IPAddress.Parse(Address), Port);
-
             state.Listener = new Socket(AddressFamily.InterNetworkV6,
                SocketType.Stream, ProtocolType.Tcp);
             state.Listener.SetSocketOption(SocketOptionLevel.IPv6, (SocketOptionName)27, false);
-            SetupCommonListenerFields();
+            SetupCommonSocketProperties(state.Listener);
         }
 
-        private void SetupCommonListenerFields()
+        private static void SetupCommonSocketProperties(Socket socket)
         {
-            state.Listener.NoDelay = true;
-            state.Listener.Ttl = 255;
-            state.Listener.SendBufferSize = BUFFER_SIZE;
-            state.Listener.ReceiveBufferSize = BUFFER_SIZE;
-            state.Listener.LingerState = new LingerOption(true, 10);
-            state.Listener.SendTimeout = SEND_TIMEOUT;
-            state.Listener.ReceiveTimeout = RECEIVE_TIMEOUT;
-            state.Listener.SetIPProtectionLevel(IPProtectionLevel.Unrestricted);
+            socket.NoDelay = true;
+            socket.Ttl = 255;
+            socket.SendBufferSize = BUFFER_SIZE;
+            socket.ReceiveBufferSize = BUFFER_SIZE;
+            socket.LingerState = new LingerOption(true, 10);
+            socket.SendTimeout = SEND_TIMEOUT;
+            socket.ReceiveTimeout = RECEIVE_TIMEOUT;
+            socket.SetIPProtectionLevel(IPProtectionLevel.Unrestricted);
         }
 
         private void StartListening()
@@ -218,67 +210,55 @@ namespace JordanSdk.Network.Tcp
             if (Listening)
                 return;
             Listening = true;
-            state.Listener.Bind(state.Endpoint);
             state.Listener.Listen(2000);
-            listenerManager = new CancellationTokenSource();
-            var throwAway = Task.Run(() =>
-            {
-                try
-                {
-                    while (Listening)
-                    {
-                        state.Listener.BeginAccept(new AsyncCallback(AcceptConnection),
-                            state);
-                        state.ResetEvent.Wait();
-                        state.ResetEvent.Reset();
-                    }
-                }
-                catch (ThreadAbortException) { }
-            }, listenerManager.Token);
+            var istate = state.Listener.BeginAccept(new AsyncCallback(AcceptConnection),
+                           state);
         }
 
         private void AcceptConnection(IAsyncResult ar)
         {
-
             Socket connected = null;
             AcceptConnectionState state = (AcceptConnectionState)ar.AsyncState;
+            var _continue = state.Listener?.IsBound;
+            if (!_continue.HasValue || !_continue.Value)
+                return;
             try
             {
                 connected = state.Listener?.EndAccept(ar);
             }
-            catch (ObjectDisposedException) { }
+            catch (ObjectDisposedException) {
+                Listening = false;
+            }
             catch (Exception ex) {
                 Diagnostic.DiagnosticCenter.Instance.Log?.LogException<Exception>(ex);
             }
-            finally
+            if (Listening)
             {
-                state.ResetEvent.Set();
-            }
-            try
-            {
-                if (connected != null)
-                    CollectSocket(connected);
-            }
-            catch (Exception ex)
-            {
-                Diagnostic.DiagnosticCenter.Instance.Log?.LogException<Exception>(ex);
+                state.Listener.BeginAccept(new AsyncCallback(AcceptConnection),
+                      state);
+                try
+                {
+                    if (connected != null)
+                        CollectSocket(connected);
+                }
+                catch (Exception ex)
+                {
+                    Diagnostic.DiagnosticCenter.Instance.Log?.LogException<Exception>(ex);
+                }
             }
         }
 
         private class AcceptConnectionState
         {
             public Socket Listener { get; set; }
-
-            public ManualResetEventSlim ResetEvent { get; set; } = new ManualResetEventSlim(false);
-
             public IPEndPoint Endpoint { get; set; }
         }
 
         private void CollectSocket(Socket socket)
         {
-            ISocket isocket = new TcpSocket(socket, Guid.NewGuid().ToString("N"));
-            while (!csockets.TryAdd(isocket.Token, isocket))
-                isocket = new TcpSocket(socket, Guid.NewGuid().ToString("N"));
+            ISocket isocket = new TcpSocket(socket, RandomId.Generate());
+            while (!csockets.TryAdd(isocket.Id, isocket))
+                isocket = new TcpSocket(socket, RandomId.Generate());
             isocket.OnSocketDisconnected += RemoveSocket;
             SendServerToken(isocket);
             OnConnectionRequested?.Invoke(isocket);
@@ -286,7 +266,7 @@ namespace JordanSdk.Network.Tcp
         private void RemoveSocket(ISocket socket)
         {
             ISocket isocket;
-            if(csockets.TryRemove(socket.Token,out isocket))
+            if(csockets.TryRemove(socket.Id,out isocket))
                 isocket.OnSocketDisconnected -= RemoveSocket;
         }
 
@@ -299,10 +279,7 @@ namespace JordanSdk.Network.Tcp
             if (!disposedValue)
             {
                 if(disposing && Listening)
-                        StopListening();
-
-                listenerManager?.Dispose();
-                listenerManager = null;
+                   StopListening();
                 disposedValue = true;
             }
         }
@@ -326,7 +303,7 @@ namespace JordanSdk.Network.Tcp
                 {
                     byte[] tokenBytes = new byte[received];
                     Array.ConstrainedCopy(buffer, 0, tokenBytes, 0, received);
-                    return new TcpSocket(socket, Encoding.ASCII.GetString(tokenBytes));
+                    return new TcpSocket(socket,new RandomId(tokenBytes));
                 }
                 
             }
@@ -335,30 +312,20 @@ namespace JordanSdk.Network.Tcp
 
         private static void SendServerToken(ISocket socket)
         {
-            byte[] token = Encoding.ASCII.GetBytes(socket.Token);
-            using(NetworkBuffer buffer = new NetworkBuffer(token.Length, token))
-            {
-                socket.Send(buffer);
-            }
+            socket.Send(socket.Id.ToArray());
         }
 
         private static void AsyncConnectCallback(IAsyncResult ar)
         {
-            AsyncState<Socket> asyncState = ar.AsyncState as AsyncState<Socket>;
+            AsyncCallbackState<TcpSocket> asyncState = ar.AsyncState as AsyncCallbackState<TcpSocket>;
             try
             {
-                asyncState.State.EndConnect(ar);
-                if (asyncState.CallBack != null && asyncState.CallBack is Action<TcpSocket>)
-                    (asyncState.CallBack as Action<TcpSocket>).Invoke(SetupClientToken(asyncState.State));
-                else if (asyncState.CallBack != null && asyncState.CallBack is TaskCompletionSource<TcpSocket>)
-                    (asyncState.CallBack as TaskCompletionSource<TcpSocket>).SetResult(SetupClientToken(asyncState.State));
+                asyncState.Socket.EndConnect(ar);
+                asyncState.Callback?.Invoke(SetupClientToken(asyncState.Socket));
             }
             catch (Exception ex)
             {
-                if (ar.AsyncState is TaskCompletionSource<TcpSocket>)
-                    (ar.AsyncState as TaskCompletionSource<TcpSocket>).SetException(ex);
-                else
-                    throw ex;
+                asyncState.Callback?.Invoke(null);
             }
         }
 

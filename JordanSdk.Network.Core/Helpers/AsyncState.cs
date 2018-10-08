@@ -2,17 +2,14 @@
 
 namespace JordanSdk.Network.Core
 {
-    public class AsyncState<T>
+    /// <summary>
+    /// Base asynchronous state object passed back and forth between several asynchronous functions defined in the Socket class, in order to box an System.Net.Socket object.
+    /// </summary>
+    public class AsyncState
     {
         /// <summary>
-        /// State data.
+        /// Socket object.
         /// </summary>
-        public T State { get; set; }
-
-        /// <summary>
-        /// State object used to signal completion. This is currently used to box one of two types, and Action object or a Task Completion Source object.
-        /// </summary>
-        public object CallBack { get; set; }
-
+        public Socket Socket { get; set; }
     }
 }

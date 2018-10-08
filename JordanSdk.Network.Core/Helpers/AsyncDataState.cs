@@ -7,16 +7,15 @@ using System.Threading.Tasks;
 namespace JordanSdk.Network.Core
 {
     /// <summary>
-    /// Helper class used for passing state data internally on several asynchronous functions. 
+    /// Helper class used for passing state data internally on several asynchronous functions, inheriting from Async Callback in order to take advantage of the Action declared on parent class. 
     /// </summary>
     /// <typeparam name="T">Type of State Property.</typeparam>
     /// <typeparam name="U">Type of Data Property.</typeparam>
-    /// <typeparam name="V">Type of the Complement property.</typeparam>
-    public class AsyncTripletState<T, U, V> : AsyncTupleState<T, U>
+    public class AsyncDataState <T, U> : AsyncCallbackState<T>
     {
         /// <summary>
-        /// Yet another generic storage element for states that need more than two properties.
+        /// Additional state data passed to asynchronous functions.
         /// </summary>
-        public V Complement { get; set; }
+        public U Data { get; set; }
     }
 }

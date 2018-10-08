@@ -60,6 +60,7 @@
     <Compile Include="TCPProtocolTests.cs" />
     <Compile Include="TCPSocketTests.cs" />
     <Compile Include="Utilities\Extensions.cs" />
+    <Compile Include="Utilities\TestData.cs" />
   </ItemGroup>
   <ItemGroup>
     <None Include="packages.config" />

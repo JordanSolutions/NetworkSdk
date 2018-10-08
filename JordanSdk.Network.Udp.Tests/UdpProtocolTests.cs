@@ -2,6 +2,10 @@
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using JordanSdk.Network.Core;
 using System.Threading.Tasks;
+using System.Net;
+using System.Linq;
+using System.Net.Sockets;
+using System.Collections.Generic;
 
 namespace JordanSdk.Network.Udp.Tests
 {
@@ -13,28 +17,52 @@ namespace JordanSdk.Network.Udp.Tests
         System.Threading.ManualResetEvent mevent;
         UdpProtocol ipv4Protocol;
         UdpProtocol ipv6Protocol;
-
+        List<UdpSocket> sockets = new List<UdpSocket>();
+        static string serverAddress = "";
+        static string clientAddress = "";
+        static string ipv6ServerAddress = "[::]";
+        const int PORT = 4884;
         #endregion
+
+        [ClassInitialize]
+        public static void ClassInitialized(TestContext context)
+        {
+
+            //Based on multiple IP addresses configured in the network adapter.
+
+            var selected = Dns.GetHostEntry(Dns.GetHostName()).AddressList.Where(p => {
+                return p.AddressFamily == AddressFamily.InterNetwork;
+            }).Select(p => p.ToString());
+            var selectediPV6 = Dns.GetHostEntry(Dns.GetHostName()).AddressList.Where(p => {
+                return p.AddressFamily == AddressFamily.InterNetworkV6;
+            }).Select(p => p.ToString());
+            ipv6ServerAddress = selectediPV6.First();
+            serverAddress = selected.First();
+            clientAddress = selected.Skip(1).First();
+
+        }
 
         [TestInitialize]
         public void Initialize()
         {
             ipv4Protocol = new UdpProtocol();
-            ipv4Protocol.Port = 4884;
-            ipv4Protocol.IPAddressKind = IPAddressKind.IPV4;
+            ipv4Protocol.Address = serverAddress;
+            ipv4Protocol.Port = PORT;
             ipv6Protocol = new UdpProtocol();
-            ipv6Protocol.Port = 4884;
-            ipv6Protocol.IPAddressKind = IPAddressKind.IPV6;
+            ipv6Protocol.Port = PORT;
+            ipv6Protocol.Address = ipv6ServerAddress;
             mevent = new System.Threading.ManualResetEvent(true);
         }
 
         [TestCleanup]
         public void TestCleanup()
         {
-            if (ipv4Protocol != null && ipv4Protocol.Listening)
-                ipv4Protocol.StopListening();
-            if (ipv6Protocol != null && ipv6Protocol.Listening)
-                ipv6Protocol.StopListening();
+            foreach (UdpSocket socket in sockets)
+                socket?.Disconnect();
+            //if (ipv4Protocol != null && ipv4Protocol.Listening)
+            ipv4Protocol.StopListening();
+            //if (ipv6Protocol != null && ipv6Protocol.Listening)
+            ipv6Protocol.StopListening();
         }
 
         [TestMethod(), TestCategory("UDPProcotol (Listen)")]
@@ -80,11 +108,10 @@ namespace JordanSdk.Network.Udp.Tests
         public void DisposeTest()
         {
             var ipv4Protocol = new UdpProtocol();
-            ipv4Protocol.Port = 4884;
-            ipv4Protocol.IPAddressKind = IPAddressKind.IPV4;
+            ipv4Protocol.Port = PORT;
             ipv4Protocol.Listen();
             ipv4Protocol.Dispose();
-            Assert.IsTrue(true);
+            Assert.IsFalse(ipv4Protocol.Listening);
         }
 
         [TestMethod(), TestCategory("UDPProcotol (Connect)")]
@@ -94,13 +121,17 @@ namespace JordanSdk.Network.Udp.Tests
             try
             {
                 ipv4Protocol.Listen();
-                UdpProtocol ipvClient = this.CreateIPV4ClientProtocol();
+                UdpProtocol ipvClient = this.CreateIPV4ClientProtocol(clientAddress);
+                UdpSocket udpSocket = null;
                 ipvClient.ConnectAsync((socket) =>
                 {
-                    Assert.IsTrue(socket.Connected, "A connection could not be established.");
+                    udpSocket = socket;
                     mevent.Set();
-                });
-                mevent.WaitOne();
+                },serverAddress,PORT);
+                Assert.IsTrue(mevent.WaitOne(10000), "Connection callback never triggered callback.");
+                sockets.Add(udpSocket);
+                Assert.IsNotNull(udpSocket, "A connection could not be established.");
+                Assert.IsTrue(udpSocket.Connected, "A connection could not be established.");
             }
             catch (Exception ex)
             {
@@ -115,13 +146,18 @@ namespace JordanSdk.Network.Udp.Tests
             try
             {
                 ipv6Protocol.Listen();
-                UdpProtocol ipvClient = this.CreateIPV6ClientProtocol();
+                UdpProtocol ipvClient = this.CreateIPV6ClientProtocol(ipv6ServerAddress);
+                UdpSocket udpSocket = null;
                 ipvClient.ConnectAsync((socket) =>
                 {
-                    Assert.IsTrue(socket.Connected, "A connection could not be established.");
+                    udpSocket = socket;
                     mevent.Set();
-                });
-                mevent.WaitOne();
+                }, ipv6ServerAddress, PORT);
+                Assert.IsTrue(mevent.WaitOne(10000), "Connection never triggered callback.");
+                sockets.Add(udpSocket);
+                Assert.IsNotNull(udpSocket, "Callback did not receive a socket.");
+                Assert.IsTrue(udpSocket.Connected, "A connection could not be established.");
+                udpSocket.Disconnect();
             }
             catch (Exception ex)
             {
@@ -136,8 +172,9 @@ namespace JordanSdk.Network.Udp.Tests
             try
             {
                 ipv4Protocol.Listen();
-                UdpProtocol ipvClient = this.CreateIPV4ClientProtocol();
-                var udpSocket = await ipvClient.ConnectAsync();
+                UdpProtocol ipvClient = this.CreateIPV4ClientProtocol(clientAddress);
+                var udpSocket = await ipvClient.ConnectAsync(serverAddress, PORT);
+                sockets.Add(udpSocket);
                 Assert.IsNotNull(udpSocket);
                 Assert.IsTrue(udpSocket.Connected);
             }
@@ -153,8 +190,9 @@ namespace JordanSdk.Network.Udp.Tests
             try
             {
                 ipv6Protocol.Listen();
-                UdpProtocol ipvClient = this.CreateIPV6ClientProtocol();
-                var udpSocket = await ipvClient.ConnectAsync();
+                UdpProtocol ipvClient = this.CreateIPV6ClientProtocol(ipv6ServerAddress);
+                var udpSocket = await ipvClient.ConnectAsync(ipv6ServerAddress, PORT);
+                sockets.Add(udpSocket);
                 Assert.IsNotNull(udpSocket);
                 Assert.IsTrue(udpSocket.Connected);
             }
@@ -171,8 +209,10 @@ namespace JordanSdk.Network.Udp.Tests
             try
             {
                 ipv4Protocol.Listen();
-                UdpProtocol ipvClient = this.CreateIPV4ClientProtocol();
-                var udpSocket = ipvClient.Connect();
+                UdpProtocol ipvClient = this.CreateIPV4ClientProtocol(clientAddress);
+                var udpSocket = ipvClient.Connect(serverAddress, PORT);
+                sockets.Add(udpSocket);
+                Assert.IsNotNull(udpSocket);
                 Assert.IsTrue(udpSocket.Connected, "A connection could not be established.");
             }
             catch (Exception ex)
@@ -187,8 +227,10 @@ namespace JordanSdk.Network.Udp.Tests
             try
             {
                 ipv6Protocol.Listen();
-                UdpProtocol ipvClient = this.CreateIPV6ClientProtocol();
-                var udpSocket = ipvClient.Connect();
+                UdpProtocol ipvClient = this.CreateIPV6ClientProtocol(ipv6ServerAddress);
+                var udpSocket = ipvClient.Connect(ipv6ServerAddress, PORT);
+                sockets.Add(udpSocket);
+                Assert.IsNotNull(udpSocket);
                 Assert.IsTrue(udpSocket.Connected, "A connection could not be established.");
             }
             catch (Exception ex)
@@ -208,10 +250,14 @@ namespace JordanSdk.Network.Udp.Tests
                 eventInvoked = true;
                 mevent.Set();
             };
-            UdpProtocol ipvClient = this.CreateIPV4ClientProtocol();
-            UdpSocket clientSocket = ipvClient.Connect();
+            UdpProtocol ipvClient = this.CreateIPV4ClientProtocol(clientAddress);
+            UdpSocket clientSocket = ipvClient.Connect(serverAddress, PORT);
+            sockets.Add(clientSocket);
+
+            clientSocket.Send(TestData.GetDummyStream().ToArray());
             Assert.IsTrue(clientSocket.Connected);
-            mevent.WaitOne(10000);
+            if(!mevent.WaitOne(10000))
+                ipv4Protocol.GetDiagnostics();
             Assert.IsTrue(eventInvoked);
         }
 

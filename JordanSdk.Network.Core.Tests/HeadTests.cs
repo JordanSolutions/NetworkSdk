@@ -2,10 +2,10 @@
 using System.Linq;
 using System.Net.Sockets;
 using JordanSdk.Network.Core;
-using JordanSdk.Network.Udp.Tests;
+using JordanSdk.Network.Core.Tests;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
-namespace JordanSdk.Network.Udp.Packages.Tests
+namespace JordanSdk.Network.Core.Tests
 {
     [TestClass]
     public class HeadTests
@@ -26,7 +26,7 @@ namespace JordanSdk.Network.Udp.Packages.Tests
         public void ConstructorSmallStream()
         {
             
-            Head head = new Head(small);
+            Head head = new Head(small, 8192);
             Assert.IsNotNull(head.Next);
             Assert.IsNotNull(head.Id);
             Assert.IsTrue(head.PackageCount > 0);
@@ -37,7 +37,7 @@ namespace JordanSdk.Network.Udp.Packages.Tests
         public void ConstructorBigStream()
         {
            
-            Head head = new Head(medium);
+            Head head = new Head(medium, 8192);
             Assert.IsNotNull(head.Next);
             Assert.IsNotNull(head.Id);
             Assert.IsTrue(head.PackageCount > 0);
@@ -47,7 +47,7 @@ namespace JordanSdk.Network.Udp.Packages.Tests
         [TestMethod, TestCategory("Head (Constructor)")]
         public void ConstructorHugeStream()
         {
-            Head head = new Head(large);
+            Head head = new Head(large, 8192);
             Assert.IsNotNull(head.Next);
             Assert.IsNotNull(head.Id);
             Assert.IsTrue(head.PackageCount > 0);

@@ -9,36 +9,31 @@ namespace JordanSdk.Network.Udp.Tests
 {
     static class TestExtensions
     {
-        public static UdpProtocol CreateIPV4ClientProtocol(this UdpProtocolTests test) => CreateIPV4ClientProtocol();
+        static Random rnd = new Random();
+        public static UdpProtocol CreateIPV4ClientProtocol(this UdpProtocolTests test, string localAddress) => CreateIPV4ClientProtocol(localAddress);
 
-        public static UdpProtocol CreateIPV4ClientProtocol(this UdpSocketTests test) => CreateIPV4ClientProtocol();
+        public static UdpProtocol CreateIPV4ClientProtocol(this UdpSocketTests test, string localAddress) => CreateIPV4ClientProtocol(localAddress);
 
-        public static UdpProtocol CreateIPV6ClientProtocol(this UdpProtocolTests test) => CreateIPV6ClientProtocol();
+        public static UdpProtocol CreateIPV6ClientProtocol(this UdpProtocolTests test, string localAddress) => CreateIPV6ClientProtocol(localAddress);
 
-        public static UdpProtocol CreateIPV6ClientProtocol(this UdpSocketTests test) => CreateIPV6ClientProtocol();
+        public static UdpProtocol CreateIPV6ClientProtocol(this UdpSocketTests test, string localAddress) => CreateIPV6ClientProtocol(localAddress);
 
-        public static NetworkBuffer CreateDummyStream(this UdpProtocolTests test) => TestData.GetDummyStream();
-
-        public static NetworkBuffer CreateDummyStream(this UdpSocketTests test) => TestData.GetDummyStream();
-
-        private static UdpProtocol CreateIPV4ClientProtocol()
+        private static UdpProtocol CreateIPV4ClientProtocol(string localAddress)
         {
             return new UdpProtocol()
             {
-                Address = "127.0.0.1",
-                IPAddressKind = IPAddressKind.IPV4,
-                Port = 4884
+                Address = localAddress == null ? "127.0.0.1" : localAddress,
+                Port = rnd.Next(10000, short.MaxValue - 1)
             };
         }
 
 
-        private static UdpProtocol CreateIPV6ClientProtocol()
+        private static UdpProtocol CreateIPV6ClientProtocol(string localAddress)
         {
             return new UdpProtocol()
             {
-                Address = "::1",
-                IPAddressKind = IPAddressKind.IPV6,
-                Port = 4884
+                Address = localAddress == null ? "::1" : localAddress,
+                Port = rnd.Next(10000, short.MaxValue - 1)
             };
         }
       
