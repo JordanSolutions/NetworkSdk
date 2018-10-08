@@ -112,7 +112,7 @@ namespace JordanSdk.Network.Core.Tests
                 Array.ConstrainedCopy(BIG_BUFFER_DATA, i, copy, 0, 100);
                 buffer.Append(copy);
             }
-            byte[] data = buffer.GetBuffer();
+            byte[] data = buffer.ToArray();
             Assert.AreEqual<int>(BIG_BUFFER_DATA.Length, buffer.Received, "Received was not the right size.");//An impossible test case
             Assert.AreEqual<int>(BIG_BUFFER_DATA.Length, buffer.Size, "Size was not assign the right value.");//An impossible test case
             Assert.AreEqual<int>(buffer.Received, data.Length, "Received and length should be the same size.");
@@ -127,7 +127,7 @@ namespace JordanSdk.Network.Core.Tests
         {
             var buffer = new NetworkBuffer(HUGE_BUFFER_DATA.Length);
             buffer.Append(HUGE_BUFFER_DATA);
-            byte[] data = buffer.GetBuffer();
+            byte[] data = buffer.ToArray();
             Assert.AreEqual<int>(HUGE_BUFFER_DATA.Length, buffer.Received, "Received was not the right size.");//An impossible test case
             Assert.AreEqual<int>(HUGE_BUFFER_DATA.Length, buffer.Size, "Size was not assign the right value.");//An impossible test case
             Assert.AreEqual<int>(buffer.Received, data.Length, "Received and length should be the same size.");
@@ -142,7 +142,7 @@ namespace JordanSdk.Network.Core.Tests
         {
             var buffer = new NetworkBuffer(10);
             buffer.Append(new byte[] { 0, 1, 2, 3, 4, 5, 6, 7 });
-            byte[] data = buffer.GetBuffer();
+            byte[] data = buffer.ToArray();
             Assert.AreEqual<int>(8, buffer.Received, "Received was not the right size.");//An impossible test case
             Assert.AreEqual<int>(10, buffer.Size, "Size was not assign the right value.");//An impossible test case
             Assert.AreEqual<int>(buffer.Received, data.Length, "Received and length should be the same size.");
@@ -156,7 +156,7 @@ namespace JordanSdk.Network.Core.Tests
             var buffer = new NetworkBuffer(8);
             buffer.Append(new byte[] { 0, 1, 2, 3 });
             buffer.Append(new byte[] { 4, 5, 6, 7 });
-            byte[] data = buffer.GetBuffer();
+            byte[] data = buffer.ToArray();
             Assert.AreEqual<int>(8, buffer.Received, "Received was not the right size.");//An impossible test case
             Assert.AreEqual<int>(8, buffer.Size, "Size was not assign the right value.");//An impossible test case
             Assert.AreEqual<int>(buffer.Received, data.Length, "Received and length should be the same size.");
@@ -176,7 +176,7 @@ namespace JordanSdk.Network.Core.Tests
             var data = new byte[] { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9 };
             buffer.AppendConstrained(data, 2, 5);
             Assert.AreEqual<int>(5, buffer.Received);
-            var received = buffer.GetBuffer();
+            var received = buffer.ToArray();
             Assert.AreEqual<byte>(2, received[0]);
             Assert.AreEqual<byte>(6, received[4]);
             buffer.Dispose();
@@ -230,7 +230,7 @@ namespace JordanSdk.Network.Core.Tests
             var data = new byte[] { 10, 121, 55, 32, 44, 56, 31, 46, 71, 88 };
             buffer.AppendConstrained(data, 2, 5);
             Assert.AreEqual<int>(15, buffer.Received);
-            var received = buffer.GetBuffer();
+            var received = buffer.ToArray();
             Assert.AreEqual<byte>(0, received[0]);
             Assert.AreEqual<byte>(4, received[4]);
             Assert.AreEqual<byte>(55, received[10]);
@@ -348,7 +348,7 @@ namespace JordanSdk.Network.Core.Tests
         {
             var buffer = new NetworkBuffer(BIG_BUFFER_DATA.Length, BIG_BUFFER_DATA);
             buffer.Resize(1000);
-            byte[] read = buffer.GetBuffer();
+            byte[] read = buffer.ToArray();
             Assert.AreEqual<int>(1000, read.Length, "The resized buffer should contain 1000 bytes.");
             buffer.Dispose();
         }
@@ -358,7 +358,7 @@ namespace JordanSdk.Network.Core.Tests
         {
             var buffer = new NetworkBuffer(BIG_BUFFER_DATA.Length, BIG_BUFFER_DATA);
             buffer.Resize(5000);
-            byte[] data = buffer.GetBuffer();
+            byte[] data = buffer.ToArray();
             Assert.AreEqual<int>(BIG_BUFFER_DATA.Length, data.Length, "The internal buffer size should not have changed when expanding the buffer.");
             Assert.AreEqual<byte>(BIG_BUFFER_DATA[5], data[5], "Buffer data should be the same after resizing.");
             Assert.AreEqual<byte>(BIG_BUFFER_DATA[1024], data[1024], "Buffer data should be the same after resizing.");

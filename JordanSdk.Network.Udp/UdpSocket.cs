@@ -2,55 +2,60 @@
 using System.Threading.Tasks;
 using System.Net.Sockets;
 using JordanSdk.Network.Core;
+using System.Net;
+using System.Linq;
 
-namespace JordanSdk.Network.Tcp
+namespace JordanSdk.Network.Udp
 {
     /// <summary>
-    /// Simplifies sending and receiving data through the network for TCP connection oriented sockets.
+    /// Simplifies sending and receiving data through the network for UDP connectionless sockets.
     /// </summary>
-    public class TcpSocket : ISocket
+    public class UdpSocket : ISocket
     {
         #region Private Fields
-
         Socket socket;
+        EndPoint endPoint;
         RandomId id;
-        
+        bool connected = false;
+
         #endregion
 
         #region Events
 
         /// <summary>
-        /// Event invoked when the connection is lost or closed.
+        /// Event invoked when the connection is lost or purposely closed.
         /// </summary>
         public event DisconnectedDelegate OnSocketDisconnected;
 
         #endregion
 
-        #region Public Properties
+        #region Properties
 
         /// <summary>
-        /// True if the socket is connected, false otherwise.
+        /// This property indicates the connected state of your socket.
         /// </summary>
-        public bool Connected { get { return socket?.Connected ?? false; } }
+        public bool Connected { get { return connected; } internal set { connected = value; } }
 
         /// <summary>
         /// Unique identifier assigned by the server.
         /// </summary>
         public RandomId Id { get { return id; } }
 
+        internal EndPoint RemoteEndPoint => endPoint;
+
         #endregion
 
         #region Constructor
 
-        /// <summary>
-        /// Constructor taking the underlying socket and unique identifier assigned / created by the server.
-        /// </summary>
-        /// <param name="socket">Underlying socket object</param>
-        /// <param name="id">Unique identifier.</param>
-        internal TcpSocket(Socket socket, RandomId id)
+        internal UdpSocket(Socket socket, IPEndPoint endPoint, RandomId id)
         {
-            this.socket = socket ?? throw new ArgumentNullException("socket", "Socket can not be null.");
+            if (socket == null)
+                throw new ArgumentNullException("socket", "Socket can not be null.");
+            else if (endPoint == null)
+                throw new ArgumentNullException("endPoint", "Client endpoint can not be null.");
+            this.socket = socket;
             this.id = id;
+            this.endPoint = endPoint;
         }
 
 
@@ -66,9 +71,14 @@ namespace JordanSdk.Network.Tcp
         /// </summary>
         public void Disconnect()
         {
-            socket.Shutdown(SocketShutdown.Both);
-            socket.Disconnect(false);
-            socket.Close();
+            Connected = false;
+            var _socket = socket;
+            socket = null;
+            _socket?.Shutdown(SocketShutdown.Both);
+            _socket?.Close();
+            _socket?.Dispose();
+            
+            
             OnSocketDisconnected?.Invoke(this);
         }
 
@@ -78,27 +88,17 @@ namespace JordanSdk.Network.Tcp
         /// <returns>Returns a Task that can be used to wait for the operation to complete.</returns>
         public async Task DisconnectAsync()
         {
-
-            TaskCompletionSource<bool> task = new TaskCompletionSource<bool>();
-            socket.Shutdown(SocketShutdown.Both);
-            socket.BeginDisconnect(false, (e) =>
+            Connected = false;
+            await Task.Run(() =>
             {
-                try
-                {
-                    socket.EndDisconnect(e);
-                    socket.Shutdown(SocketShutdown.Both);
-                    socket.Close();
-                    task.TrySetResult(true);
-                }
-                catch (Exception ex) {
-                    task.SetException(ex);
-                }
-                finally
-                {
-                    OnSocketDisconnected?.Invoke(this);
-                }
-            }, this);
-            await task.Task;
+                var _socket = socket;
+                socket = null;
+                _socket?.Shutdown(SocketShutdown.Both);
+                _socket?.Close();
+                _socket?.Dispose();
+                OnSocketDisconnected?.Invoke(this);
+                OnSocketDisconnected?.Invoke(this);
+            });
         }
 
         /// <summary>
@@ -107,25 +107,14 @@ namespace JordanSdk.Network.Tcp
         /// <param name="callback">Callback invoked when the socket is disconnected.</param>
         public void DisconnectAsync(Action callback)
         {
-            socket.Shutdown(SocketShutdown.Both);
-            socket.BeginDisconnect(false, (e) =>
+            Connected = false;
+            Task.Run(() =>
             {
-                try
-                {
-                    socket.EndDisconnect(e);
-                    socket.Shutdown(SocketShutdown.Both);
-                    socket.Close();
-                    callback?.Invoke();
-                }
-                catch (Exception ex)
-                {
-                    throw ex;
-                }
-                finally
-                {
-                    OnSocketDisconnected?.Invoke(this);
-                }
-            }, this);
+                socket.Shutdown(SocketShutdown.Both);
+                socket.Close();
+                OnSocketDisconnected?.Invoke(this);
+                callback?.Invoke();
+            });
         }
 
         #endregion
@@ -139,7 +128,10 @@ namespace JordanSdk.Network.Tcp
         /// <returns>Returns the amount of bytes sent.</returns>
         public int Send(byte[] data)
         {
-            return socket.Send(data);
+            if (!Connected)
+                return 0;
+            return socket.SendTo(data, endPoint);
+            
         }
 
         /// <summary>
@@ -149,14 +141,14 @@ namespace JordanSdk.Network.Tcp
         /// <returns>Returns the amount of bytes written to the network.</returns>
         public async Task<int> SendAsync(byte[] data)
         {
+            if (!Connected)
+                return 0;
+
             TaskCompletionSource<int> task = new TaskCompletionSource<int>();
             //Need to create an immutable copy if the total count of bytes is greater than buffer size.
-            socket.BeginSend(data, 0, data.Length, 0, SendCallback,
-                new AsyncCallbackState<int>()
-                {
-                    Socket = socket,
-                    Callback = (sent) => { task.SetResult(sent); }
-                });
+            var iresult = socket.BeginSendTo(data, 0, data.Length, 0, endPoint, SendCallback, new AsyncCallbackState<int>() { Socket = socket, Callback = (sent) => {
+                task.SetResult(sent);
+            } });
             return await task.Task;
         }
 
@@ -167,13 +159,14 @@ namespace JordanSdk.Network.Tcp
         /// <param name="callback">Callback invoked once the write operation concludes, containing the amount of bytes sent through the network.</param>
         public void SendAsync(byte[] data, Action<int> callback)
         {
-            //Need to create an immutable copy if the total count of bytes is greater than buffer size.
-            socket.BeginSend(data, 0, data.Length, 0, SendCallback, new AsyncCallbackState<int>() { Socket = socket, Callback = callback });
+            if (!Connected)
+                callback?.Invoke(0);
+            socket.BeginSendTo(data, 0, data.Length, 0, endPoint, SendCallback, new AsyncCallbackState<int>() { Socket = socket, Callback = callback });
         }
 
         #endregion
 
-        #region Receiving
+        #region Receiving Data
 
         /// <summary>
         /// Use this function to receive data from the network asynchronously. This function will invoke the provided action once data is received.
@@ -181,35 +174,41 @@ namespace JordanSdk.Network.Tcp
         /// <param name="callback">Callback to be invoked when data is received.</param>
         public void ReceiveAsync(Action<byte[]> callback)
         {
-            byte[] buffer = new byte[TcpProtocol.BUFFER_SIZE];
-            socket.BeginReceive(buffer, 0, TcpProtocol.BUFFER_SIZE, 0, ReceiveCallback, new AsyncDataState<byte[], byte[]>() { Socket = socket, Data = buffer, Callback = callback });
+            if (!Connected)
+                callback?.Invoke(null);
+            byte[] buffer = new byte[UdpProtocol.BUFFER_SIZE];
+            socket.BeginReceiveFrom(buffer, 0, UdpProtocol.BUFFER_SIZE, 0, ref endPoint, ReceiveCallback, new AsyncDataState<byte[], byte[]>() { Socket = socket, Data = buffer, Callback = callback });
         }
 
         /// <summary>
         /// Use this function to receive data from the network asynchronously.
         /// </summary>
-        /// <returns>Returns an INetworkBuffer object with data received.</returns>
+        /// <returns>Returns an awaitable Task with a byte array with data received.</returns>
         public async Task<byte[]> ReceiveAsync()
         {
-            byte[] buffer = new byte[TcpProtocol.BUFFER_SIZE];
+            if (!Connected)
+                return null;
+            byte[] buffer = new byte[UdpProtocol.BUFFER_SIZE];
             var task = new TaskCompletionSource<byte[]>();
-            socket.BeginReceive(buffer, 0, TcpProtocol.BUFFER_SIZE, 0, ReceiveCallback, new AsyncDataState<byte[], byte[]>() { Socket = socket, Data = buffer, Callback = (result) => { task.SetResult(result); } });
+            socket.BeginReceiveFrom(buffer, 0, UdpProtocol.BUFFER_SIZE, 0, ref endPoint, ReceiveCallback, new AsyncDataState<byte[], byte[]>() { Socket = socket, Data = buffer, Callback = (result)=> { task.SetResult(result); } });
             return await task.Task;
         }
 
         /// <summary>
         /// Use this function to receive data from the network. This function blocks until data is received.
         /// </summary>
-        /// <returns>Returns a Network Buffer with the data received.</returns>
+        /// <returns>Returns a byte array with the data received.</returns>
         public byte[] Receive()
         {
-            byte[] buffer = new byte[TcpProtocol.BUFFER_SIZE];
-            int size = socket.Receive(buffer, 0, TcpProtocol.BUFFER_SIZE, 0);
+            if (!Connected)
+                return null;
+            byte[] buffer = new byte[UdpProtocol.BUFFER_SIZE];
+            int size = socket.ReceiveFrom(buffer, 0, UdpProtocol.BUFFER_SIZE, 0, ref endPoint);
             if (size > 0)
             {
-                var result = new byte[size];
-                Array.Copy(buffer, 0, result, 0, size);
-                return result;
+                var _copy = new byte[size];
+                Array.Copy(buffer, 0, _copy, 0, size);
+                return _copy;
             }
             return null;
         }
@@ -220,19 +219,19 @@ namespace JordanSdk.Network.Tcp
 
         #region Private Functions
 
-        private static void ReceiveCallback(IAsyncResult ar)
+        private void ReceiveCallback(IAsyncResult ar)
         {
             AsyncDataState<byte[], byte[]> state = ar.AsyncState as AsyncDataState<byte[], byte[]>;
             try
             {
-                int size = state.Socket.EndReceive(ar);
-                byte[] result = null;
+                int size = state.Socket.EndReceiveFrom(ar,ref endPoint);
+                byte[] received = null;
                 if (size > 0)
                 {
-                    result = new byte[size];
-                    Array.Copy(state.Data, 0, result, 0, size);
+                    received = new byte[size];
+                    Array.Copy(state.Data, 0, received, 0, size);
                 }
-                state.Callback?.Invoke(result);
+                state.Callback?.Invoke(received);
             }
             catch (Exception ex)
             {
@@ -240,12 +239,12 @@ namespace JordanSdk.Network.Tcp
             }
         }
 
-        private static void SendCallback(IAsyncResult ar)
+        private void SendCallback(IAsyncResult ar)
         {
             AsyncCallbackState<int> state = ar.AsyncState as AsyncCallbackState<int>;
             try
             {
-                int sent = state.Socket.EndSend(ar);
+                int sent = state.Socket.EndSendTo(ar);
                 state.Callback?.Invoke(sent);
             }
             catch (Exception ex)

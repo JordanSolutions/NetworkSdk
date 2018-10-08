@@ -1,12 +1,12 @@
 ﻿using Microsoft.VisualStudio.TestTools.UnitTesting;
-using JordanSdk.Network.TCP;
+using JordanSdk.Network.Core;
 using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
 using System.Threading.Tasks;
+using System.Net;
+using System.Linq;
+using System.Net.Sockets;
 
-namespace JordanSdk.Network.TCP.Tests
+namespace JordanSdk.Network.Tcp.Tests
 {
     [TestClass()]
     public class TCPProtocolTests
@@ -14,20 +14,31 @@ namespace JordanSdk.Network.TCP.Tests
         #region Private Fields
 
         System.Threading.ManualResetEvent mevent;
-        TCPProtocol ipv4Protocol;
-        TCPProtocol ipv6Protocol;
-
+        TcpProtocol ipv4Protocol;
+        TcpProtocol ipv6Protocol;
+        static string serverAddress = "";
+        const string ipv6ServerAddress = "::1";
+        const int PORT = 4884;
         #endregion
+
+
+        [ClassInitialize]
+        public static void ClassInitialized(TestContext context)
+        {
+
+            //Based on multiple IP addresses configured in the network adapter.
+
+            var selected = Dns.GetHostEntry(Dns.GetHostName()).AddressList.Where(p => {
+                return p.AddressFamily == AddressFamily.InterNetwork;
+            }).Select(p => p.ToString());
+            serverAddress = selected.First();
+        }
 
         [TestInitialize]
         public void Initialize()
         {
-            ipv4Protocol = new TCPProtocol();
-            ipv4Protocol.Port = 4884;
-            ipv4Protocol.IPAddressKind = IPAddressKind.IPV4;
-            ipv6Protocol = new TCPProtocol();
-            ipv6Protocol.Port = 4884;
-            ipv6Protocol.IPAddressKind = IPAddressKind.IPV6;
+            ipv4Protocol = new TcpProtocol() { Port = PORT, Address = serverAddress };
+            ipv6Protocol = new TcpProtocol() { Port = PORT, Address = IPAddress.IPv6Any.ToString() };
             mevent = new System.Threading.ManualResetEvent(true);
         }
 
@@ -82,12 +93,11 @@ namespace JordanSdk.Network.TCP.Tests
         [TestMethod(), TestCategory("TCPProtocol (Dispose)")]
         public void DisposeTest()
         {
-            var ipv4Protocol = new TCPProtocol();
+            var ipv4Protocol = new TcpProtocol();
             ipv4Protocol.Port = 4884;
-            ipv4Protocol.IPAddressKind = IPAddressKind.IPV4;
             ipv4Protocol.Listen();
             ipv4Protocol.Dispose();
-            Assert.IsTrue(true);
+            Assert.IsFalse(ipv4Protocol.Listening);
         }
 
         [TestMethod(), TestCategory("TCPProtocol (Connect)")]
@@ -97,12 +107,12 @@ namespace JordanSdk.Network.TCP.Tests
             try
             {
                 ipv4Protocol.Listen();
-                TCPProtocol ipvClient = this.CreateIPV4ClientProtocol();
+                TcpProtocol ipvClient = this.CreateIPV4ClientProtocol();
                 ipvClient.ConnectAsync((socket) =>
                 {
                     Assert.IsTrue(socket.Connected, "A connection could not be established.");
                     mevent.Set();
-                });
+                }, serverAddress, PORT);
                 mevent.WaitOne();
             }
             catch (Exception ex)
@@ -118,12 +128,12 @@ namespace JordanSdk.Network.TCP.Tests
             try
             {
                 ipv6Protocol.Listen();
-                TCPProtocol ipvClient = this.CreateIPV6ClientProtocol();
+                TcpProtocol ipvClient = this.CreateIPV6ClientProtocol();
                 ipvClient.ConnectAsync((socket) =>
                 {
                     Assert.IsTrue(socket.Connected, "A connection could not be established.");
                     mevent.Set();
-                });
+                }, ipv6ServerAddress, PORT);
                 mevent.WaitOne();
             }
             catch (Exception ex)
@@ -139,8 +149,8 @@ namespace JordanSdk.Network.TCP.Tests
             try
             {
                 ipv4Protocol.Listen();
-                TCPProtocol ipvClient = this.CreateIPV4ClientProtocol();
-                var tcpSocket = await ipvClient.ConnectAsync();
+                TcpProtocol ipvClient = this.CreateIPV4ClientProtocol();
+                var tcpSocket = await ipvClient.ConnectAsync(serverAddress, PORT);
                 Assert.IsNotNull(tcpSocket);
                 Assert.IsTrue(tcpSocket.Connected);
             }
@@ -156,8 +166,8 @@ namespace JordanSdk.Network.TCP.Tests
             try
             {
                 ipv6Protocol.Listen();
-                TCPProtocol ipvClient = this.CreateIPV6ClientProtocol();
-                var tcpSocket = await ipvClient.ConnectAsync();
+                TcpProtocol ipvClient = this.CreateIPV6ClientProtocol();
+                var tcpSocket = await ipvClient.ConnectAsync(ipv6ServerAddress, PORT);
                 Assert.IsNotNull(tcpSocket);
                 Assert.IsTrue(tcpSocket.Connected);
             }
@@ -174,8 +184,8 @@ namespace JordanSdk.Network.TCP.Tests
             try
             {
                 ipv4Protocol.Listen();
-                TCPProtocol ipvClient = this.CreateIPV4ClientProtocol();
-                TCPSocket socket = ipvClient.Connect();
+                TcpProtocol ipvClient = this.CreateIPV4ClientProtocol();
+                TcpSocket socket = ipvClient.Connect(serverAddress, PORT);
                 Assert.IsTrue(socket.Connected, "A connection could not be established.");
             }
             catch (Exception ex)
@@ -190,8 +200,8 @@ namespace JordanSdk.Network.TCP.Tests
             try
             {
                 ipv6Protocol.Listen();
-                TCPProtocol ipvClient = this.CreateIPV6ClientProtocol();
-                TCPSocket socket = ipvClient.Connect();
+                TcpProtocol ipvClient = this.CreateIPV6ClientProtocol();
+                TcpSocket socket = ipvClient.Connect(ipv6ServerAddress, PORT);
                 Assert.IsTrue(socket.Connected, "A connection could not be established.");
             }
             catch (Exception ex)
@@ -211,9 +221,9 @@ namespace JordanSdk.Network.TCP.Tests
                  eventInvoked = true;
                  mevent.Set();
              };
-            TCPProtocol ipvClient = this.CreateIPV4ClientProtocol();
-            TCPSocket clientSocket = ipvClient.Connect();
-            mevent.WaitOne(1000);
+            TcpProtocol ipvClient = this.CreateIPV4ClientProtocol();
+            TcpSocket clientSocket = ipvClient.Connect(serverAddress, PORT);
+            mevent.WaitOne(10000);
             Assert.IsTrue(eventInvoked);
         }
 

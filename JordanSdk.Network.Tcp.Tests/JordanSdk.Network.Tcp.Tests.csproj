@@ -60,6 +60,7 @@
     <Compile Include="TCPProtocolTests.cs" />
     <Compile Include="TCPSocketTests.cs" />
     <Compile Include="Utilities\Extensions.cs" />
+    <Compile Include="Utilities\TestData.cs" />
   </ItemGroup>
   <ItemGroup>
     <None Include="packages.config" />
@@ -73,9 +74,9 @@
       <Project>{9df0acf3-7261-4536-8c3a-467aa86f0cdb}</Project>
       <Name>JordanSdk.Network.Core</Name>
     </ProjectReference>
-    <ProjectReference Include="..\JordanSdk.Network.TCP\JordanSdk.Network.TCP.csproj">
-      <Project>{acc297a8-d62c-45a7-9c67-5c12f41067e5}</Project>
-      <Name>JordanSdk.Network.TCP</Name>
+    <ProjectReference Include="..\JordanSdk.Network.Tcp\JordanSdk.Network.Tcp.csproj">
+      <Project>{63f8b090-17b0-45cc-952a-a9080ab296fc}</Project>
+      <Name>JordanSdk.Network.Tcp</Name>
     </ProjectReference>
   </ItemGroup>
   <Choose>

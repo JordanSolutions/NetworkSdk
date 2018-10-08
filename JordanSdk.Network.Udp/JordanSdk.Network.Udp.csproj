@@ -1,9 +1,9 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <TargetFrameworks>netstandard2.0;net45;net451;net452;net46;net461;net462;net47;net471</TargetFrameworks>
-    <PackageId>JordanSDK.Network.Tcp</PackageId>
+    <PackageId>JordanSDK.Network.Udp</PackageId>
     <Authors>Erik Jordan</Authors>
-    <Product>Jordan SDK TCP Protocol Library</Product>
+    <Product>Jordan SDK Udp Protocol Library</Product>
     <PackageTags>Diagnostics</PackageTags>
     <PackageReleaseNotes></PackageReleaseNotes>
     <Description></Description>
@@ -14,7 +14,7 @@
     <OutputType>Library</OutputType>
     <StartupObject />
   </PropertyGroup>
-   <PropertyGroup>
+  <PropertyGroup>
     <DocumentationFile>bin\$(Configuration)\$(TargetFramework)\$(AssemblyName).xml</DocumentationFile>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(TargetFramework)|$(Platform)'=='Debug|net461|AnyCPU'">
