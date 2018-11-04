@@ -34,4 +34,7 @@
     <Reference Include="System.Net.Http" />
     <Reference Include="System.Xml" />
   </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="TaskParallelLibrary" Version="1.0.2856.0" Condition="'$(TargetFramework)'=='net35'" />
+  </ItemGroup>
 </Project>

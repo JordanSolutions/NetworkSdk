@@ -10,6 +10,12 @@ namespace JordanSdk.Network.Core
     /// <typeparam name="T">ISocket implementation.</typeparam>
     public interface IProtocol<T> where T : ISocket
     {
+
+        /// <summary>
+        /// This property is used for when NAT port mapping / port forwarding is needed. We use Open.Nat which is a great library in order to achieve this. Your implementation needs not to worried about managing port mapping.
+        /// </summary>
+        bool EnableNatTraversal { get; set; }
+
         /// <summary>
         /// Local port the socket will be bound to. For connection oriented and connectionless protocol, this property is required when creating a server protocol kind. When creating a client socket, this property is ignored for connection oriented protocols, but for connectionless protocols it is advised that a value is set although not required.
         /// </summary>

@@ -64,9 +64,9 @@ namespace JordanSdk.Network.Udp
         public string Address { get; set; } = "0.0.0.0";
 
         /// <summary>
-        /// TBD
+        /// This property is used for when NAT port mapping / port forwarding is needed. We use Open.Nat which is a great library in order to achieve this. Your implementation needs not to worried about managing port mapping.
         /// </summary>
-        public bool EnableNatTraversal { get; set; } = false;
+        public bool EnableNatTraversal { get; set; }
 
         #endregion
 
