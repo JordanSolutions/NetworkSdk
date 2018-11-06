@@ -111,7 +111,7 @@ namespace JordanSdk.Network.Udp.Tests
             ipv4Protocol.Port = PORT;
             ipv4Protocol.Listen();
             ipv4Protocol.Dispose();
-            Assert.IsFalse(ipv4Protocol.Listening);
+            Assert.IsFalse(ipv4Protocol.Listening,"The protocol Listening property was true after disposing the protocol.");
         }
 
         [TestMethod(), TestCategory("UDPProcotol (Connect)")]
@@ -175,8 +175,8 @@ namespace JordanSdk.Network.Udp.Tests
                 UdpProtocol ipvClient = this.CreateIPV4ClientProtocol(clientAddress);
                 var udpSocket = await ipvClient.ConnectAsync(serverAddress, PORT);
                 sockets.Add(udpSocket);
-                Assert.IsNotNull(udpSocket);
-                Assert.IsTrue(udpSocket.Connected);
+                Assert.IsNotNull(udpSocket, "The udpSocket instance was null.");
+                Assert.IsTrue(udpSocket.Connected, "A connection could not be established.");
             }
             catch (Exception ex)
             {
@@ -193,8 +193,8 @@ namespace JordanSdk.Network.Udp.Tests
                 UdpProtocol ipvClient = this.CreateIPV6ClientProtocol(ipv6ServerAddress);
                 var udpSocket = await ipvClient.ConnectAsync(ipv6ServerAddress, PORT);
                 sockets.Add(udpSocket);
-                Assert.IsNotNull(udpSocket);
-                Assert.IsTrue(udpSocket.Connected);
+                Assert.IsNotNull(udpSocket, "The udpSocket instance was null.");
+                Assert.IsTrue(udpSocket.Connected, "A connection could not be established.");
             }
             catch (Exception ex)
             {
@@ -255,10 +255,8 @@ namespace JordanSdk.Network.Udp.Tests
             sockets.Add(clientSocket);
 
             clientSocket.Send(TestData.GetDummyStream().ToArray());
-            Assert.IsTrue(clientSocket.Connected);
-            if(!mevent.WaitOne(10000))
-                ipv4Protocol.GetDiagnostics();
-            Assert.IsTrue(eventInvoked);
+            Assert.IsTrue(clientSocket.Connected, "A socket connection was not established.");
+            Assert.IsTrue(eventInvoked, "On Connection Requested event was not invoked");
         }
 
     }

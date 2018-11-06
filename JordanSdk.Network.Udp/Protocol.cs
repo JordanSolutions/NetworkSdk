@@ -7,20 +7,25 @@ using System.Threading;
 using System.Collections.Concurrent;
 using JordanSdk.Network.Core;
 using System.Linq;
+using Open.Nat;
 
 namespace JordanSdk.Network.Udp
 {
     /// <summary>
-    /// This class is the UDP connection-less implementation of IProtocol, and simplifies UDP network management for all possible operations such as listening and accepting incoming connections, connecting as a client to a remote server and much more.
+    /// This class is the UDP implementation of IProtocol, simplifies UDP network management for all possible operations such as listening, accepting incoming connections, connecting as a client to a remote server and much more.
     /// </summary>
     public class UdpProtocol : IProtocol<UdpSocket>, IDisposable
     {
+
         #region Private Fields
 
         private ConcurrentDictionary<RandomId, UdpSocket> csockets = new ConcurrentDictionary<RandomId, UdpSocket>();
         private Socket listener;
         private IPEndPoint _localEndpoint;
         private IPEndPoint _remoteEndpoint;
+        private bool disposedValue = false; // To detect redundant calls
+        private NatDevice nat;
+        private Mapping portMap;
 
         #endregion
 
@@ -64,12 +69,28 @@ namespace JordanSdk.Network.Udp
         public string Address { get; set; } = "0.0.0.0";
 
         /// <summary>
-        /// TBD
+        /// This property is used for when NAT port mapping / port forwarding is needed. We use Open.Nat which is a great library in order to achieve this. Your implementation needs not to worried about managing port mapping.
         /// </summary>
-        public bool EnableNatTraversal { get; set; } = false;
+        public bool EnableNatTraversal { get; set; }
 
         #endregion
 
+        #region Constructor / Destructor
+
+        /// <summary>
+        /// Default Constructor
+        /// </summary>
+        public UdpProtocol() { }
+
+        /// <summary>
+        /// Default Destructor
+        /// </summary>
+        ~UdpProtocol()
+        {
+            Dispose(false);
+        }
+        
+        #endregion
 
         #region Events
 
@@ -90,10 +111,23 @@ namespace JordanSdk.Network.Udp
             if (Listening)
                 return;
             _localEndpoint = new IPEndPoint(IPAddress.Parse(Address), Port);
-            if (_localEndpoint.AddressFamily == AddressFamily.InterNetwork)
-                SetupIPV4(_localEndpoint, out listener);
-            else
-                SetupIPV6(_localEndpoint, out listener);
+            listener = Setup(_localEndpoint);
+            if (EnableNatTraversal)
+                StartNatPortMapping();
+            StartListening(listener);
+        }
+
+        /// <summary>
+        /// Starts listening for incoming connection.
+        /// </summary>
+        public async Task ListenAsync()
+        {
+            if (Listening)
+                return;
+            _localEndpoint = new IPEndPoint(IPAddress.Parse(Address), Port);
+            listener = Setup(_localEndpoint);
+            if (EnableNatTraversal)
+                await StartNatPortMappingAsync();
             StartListening(listener);
         }
 
@@ -108,8 +142,8 @@ namespace JordanSdk.Network.Udp
             listener?.Close();
             listener?.Dispose();
             listener = null;
+            nat?.DeletePortMapAsync(portMap);
         }
-
 
         /// <summary>
         /// Initiates an asynchronous connection to a remote server.
@@ -121,11 +155,9 @@ namespace JordanSdk.Network.Udp
         {
             var remoteEndPoint = new IPEndPoint(IPAddress.Parse(remoteIp), remotePort);
             _localEndpoint = new IPEndPoint(IPAddress.Parse(Address ?? (remoteEndPoint.AddressFamily == AddressFamily.InterNetwork ? "127.0.0.1" : "::1")), Port);
-            Socket socket;
-            if (_localEndpoint.AddressFamily == AddressFamily.InterNetwork)
-                SetupIPV4(_localEndpoint, out socket);
-            else
-                SetupIPV6(_localEndpoint, out socket);
+            Socket socket = Setup(_localEndpoint);
+            if (EnableNatTraversal)
+                await StartNatPortMappingAsync();
             return await SetupClientToken(socket, remoteEndPoint);
         }
 
@@ -143,12 +175,10 @@ namespace JordanSdk.Network.Udp
                 var remoteEndPoint = new IPEndPoint(IPAddress.Parse(remoteIp), remotePort);
                 _localEndpoint = new IPEndPoint(IPAddress.Parse(Address ?? (remoteEndPoint.AddressFamily == AddressFamily.InterNetwork ? "127.0.0.1" : "::1")), Port);
 
-                Socket socket;
-                if (_localEndpoint.AddressFamily == AddressFamily.InterNetwork)
-                    SetupIPV4(_localEndpoint, out socket);
-                else
-                    SetupIPV6(_localEndpoint, out socket);
+                Socket socket = Setup(_localEndpoint);
                 var result = await SetupClientToken(socket, remoteEndPoint);
+                if (EnableNatTraversal)
+                    await StartNatPortMappingAsync();
                 if (result != null)
                     callback?.Invoke(result);
 
@@ -165,12 +195,10 @@ namespace JordanSdk.Network.Udp
         {
             var remoteEndPoint = new IPEndPoint(IPAddress.Parse(remoteIp), remotePort);
             _localEndpoint = new IPEndPoint(IPAddress.Parse(string.IsNullOrWhiteSpace(Address) ? (remoteEndPoint.AddressFamily == AddressFamily.InterNetwork ? "127.0.0.1" : "::1") : Address), Port);
-            Socket socket;
-            if (_localEndpoint.AddressFamily == AddressFamily.InterNetwork)
-                SetupIPV4(_localEndpoint, out socket);
-            else
-                SetupIPV6(_localEndpoint, out socket);
+            Socket socket = Setup(_localEndpoint);
             var result = SetupClientToken(socket, remoteEndPoint).Result;
+            if (EnableNatTraversal)
+                StartNatPortMapping();
             return result;
         }
 
@@ -182,39 +210,20 @@ namespace JordanSdk.Network.Udp
             Dispose(true);
             GC.SuppressFinalize(this);
         }
+
         #endregion
 
         #region Private Functions
 
-        private void ReleaseClients()
+        private Socket Setup(IPEndPoint endPoint)
         {
-            Parallel.ForEach(csockets.Values, (socket) =>
-            {
-                try
-                {
-                    socket.Disconnect();
-                }
-                catch (Exception) { } //Ignoring any errors, we are shutting down anyways
-            });
-        }
-
-        private void SetupIPV4(IPEndPoint endPoint, out Socket socket)
-        {
-            socket = new Socket(AddressFamily.InterNetwork,
-                SocketType.Dgram, ProtocolType.Udp);
+            Socket socket = new Socket(endPoint.AddressFamily, SocketType.Dgram, ProtocolType.Udp);
+            if (endPoint.AddressFamily == AddressFamily.InterNetworkV6)
+                socket.SetSocketOption(SocketOptionLevel.IPv6, (SocketOptionName)27, false);
             SetupCommonFields(socket);
             socket.Bind(endPoint);
+            return socket;
         }
-
-        private void SetupIPV6(IPEndPoint endPoint, out Socket socket)
-        {
-            socket = new Socket(AddressFamily.InterNetworkV6,
-               SocketType.Dgram, ProtocolType.Udp);
-            socket.SetSocketOption(SocketOptionLevel.IPv6, (SocketOptionName)27, false);
-            SetupCommonFields(socket);
-            socket.Bind(endPoint);
-        }
-
         private void SetupCommonFields(Socket socket)
         {
             socket.Ttl = 255;
@@ -224,7 +233,17 @@ namespace JordanSdk.Network.Udp
             socket.ReceiveTimeout = RECEIVE_TIMEOUT;
             socket.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.ReuseAddress, true);
             socket.SetIPProtectionLevel(IPProtectionLevel.Unrestricted);
-            //socket.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.Debug, true);
+        }
+
+        private void ReleaseClients()
+        {
+            Parallel.ForEach(csockets.Values, (socket) => {
+                try
+                {
+                    socket.Disconnect();
+                }
+                catch (Exception) { } //Ignoring any errors, we are shutting down anyways
+            });
         }
 
         private void StartListening(Socket listener)
@@ -281,11 +300,7 @@ namespace JordanSdk.Network.Udp
 
         private bool CollectSocket(IPEndPoint endPoint, out UdpSocket isocket)
         {
-            Socket socket;
-            if (_localEndpoint.AddressFamily == AddressFamily.InterNetwork)
-                SetupIPV4(endPoint, out socket);
-            else
-                SetupIPV6(endPoint, out socket);
+            Socket socket = Setup(_localEndpoint);
             isocket = new UdpSocket(socket, endPoint, RandomId.Generate());
             while (!csockets.TryAdd(isocket.Id, isocket))
                 isocket = new UdpSocket(socket, endPoint, RandomId.Generate());
@@ -309,26 +324,22 @@ namespace JordanSdk.Network.Udp
                 isocket.OnSocketDisconnected -= RemoveSocket;
         }
 
-        #region IDisposable Support / Finalizer
-
-        private bool disposedValue = false; // To detect redundant calls
-
-        protected virtual void Dispose(bool disposing)
+        private async Task StartNatPortMappingAsync()
         {
-            if (!disposedValue)
-            {
-                if (disposing && Listening)
-                    StopListening();
-                disposedValue = true;
-            }
+            var disc = new NatDiscoverer();
+            nat = await disc.DiscoverDeviceAsync();
+            portMap = new Mapping(Protocol.Tcp, Port, Port, "Socket Server Map");
+            await nat?.CreatePortMapAsync(portMap);
         }
 
-        ~UdpProtocol()
+        private void StartNatPortMapping()
         {
-            Dispose(false);
+            var disc = new NatDiscoverer();
+            nat = disc.DiscoverDeviceAsync().Result;
+            portMap = new Mapping(Protocol.Tcp, Port, Port, "Socket Server Map");
+            nat?.CreatePortMapAsync(portMap).RunSynchronously();
         }
 
-        #endregion
 
         private static void SendServerToken(UdpSocket socket)
         {
@@ -357,16 +368,31 @@ namespace JordanSdk.Network.Udp
             {
                 int sent = socket.EndSendTo(ar);
             }, null);
-            
+
             await Task.WhenAny(sendTask.Task, Task.Delay(10000));
             return result;
         }
 
 
-        public void GetDiagnostics()
+        #region IDisposable Support / Finalizer
+
+        /// <summary>
+        /// Releases all connected sockets and closes the listener if open.
+        /// </summary>
+        /// <param name="disposing"></param>
+        protected virtual void Dispose(bool disposing)
         {
-            var data = listener.GetSocketOption(SocketOptionLevel.Socket, SocketOptionName.Debug);
+            if (!disposedValue)
+            {
+                if (disposing && Listening)
+                    StopListening();
+                nat?.DeletePortMapAsync(portMap);
+                portMap = null;
+                nat = null;
+                disposedValue = true;
+            }
         }
+        #endregion
 
         #endregion
     }

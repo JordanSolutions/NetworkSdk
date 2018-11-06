@@ -10,15 +10,15 @@ namespace JordanSdk.Network.Core.Tests
     static class TestData
     {
         public static byte[] BIG_BUFFER_DATA;
-        public static byte[] HUGE_BUFFER_DATA;
+        public static byte[] FAIR_BUFFER_DATA;
 
         static TestData()
         {
             BIG_BUFFER_DATA = new byte[30000];
             Random rnd = new Random();
             rnd.NextBytes(BIG_BUFFER_DATA);
-            HUGE_BUFFER_DATA = new byte[Int16.MaxValue * 4];
-            rnd.NextBytes(HUGE_BUFFER_DATA);
+            FAIR_BUFFER_DATA = new byte[Int16.MaxValue * 4];
+            rnd.NextBytes(FAIR_BUFFER_DATA);
         }
 
         public static NetworkBuffer GetDummyStream()
@@ -27,7 +27,7 @@ namespace JordanSdk.Network.Core.Tests
             return new NetworkBuffer(helloWorld.Length, helloWorld);
         }
 
-        public static NetworkBuffer GetHugeStream() => new NetworkBuffer(TestData.HUGE_BUFFER_DATA.Length, TestData.HUGE_BUFFER_DATA);
+        public static NetworkBuffer GetFairStream() => new NetworkBuffer(TestData.FAIR_BUFFER_DATA.Length, TestData.FAIR_BUFFER_DATA);
 
 
         public static NetworkBuffer GetBigStream() => new NetworkBuffer(TestData.BIG_BUFFER_DATA.Length, TestData.BIG_BUFFER_DATA);
