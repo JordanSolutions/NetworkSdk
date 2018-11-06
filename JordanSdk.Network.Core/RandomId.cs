@@ -13,17 +13,38 @@ namespace JordanSdk.Network.Core
         private const int ID_SIZE = 5;
         private byte[] _id;
         private const string chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+        private readonly static Random rnd = new Random();
         #endregion
 
         #region Public Properties
+
+        /// <summary>
+        /// Use this property to get the length of the array.
+        /// </summary>
         public int Length => _id.Length;
         #endregion
 
         #region Constructor
 
-        public RandomId(byte[] id) { _id = id; }
+        /// <summary>
+        /// Creates a new instance of the random id class with the provided array.
+        /// </summary>
+        /// <param name="id"></param>
+        public RandomId(byte[] id) {
+            _id = id;
+        }
 
+        /// <summary>
+        /// This constructor copies 5 bytes from data starting at index, to obtain the random unique identifier. 
+        /// </summary>
+        /// <param name="data"></param>
+        /// <param name="index"></param>
         public RandomId(byte[] data, int index) {
+            if (data == null || data.Length < ID_SIZE)
+                throw new ArgumentOutOfRangeException("data",$"The provided Random Id array must be at least {ID_SIZE} bytes.");
+            if(index + ID_SIZE > data.Length)
+                throw new ArgumentOutOfRangeException("index",$"The provided index in data from where to start copying bytes must be at least {ID_SIZE} bytes less than data length.");
+
             _id = new byte[ID_SIZE];
             Array.Copy(data, index, _id,0, ID_SIZE);
         }
@@ -38,7 +59,6 @@ namespace JordanSdk.Network.Core
         /// <returns>Returns a new random package id.</returns>
         public static RandomId Generate()
         {
-            Random rnd = new Random();
             byte[] id = new byte[ID_SIZE];
             for (int i = 0; i < ID_SIZE; i++)
                 id[i] = (byte)chars[rnd.Next(chars.Length)];

@@ -1,11 +1,11 @@
 ﻿using System;
-using System.Text;
 using System.Threading.Tasks;
 using System.Net;
 using System.Net.Sockets;
-using System.Threading;
 using System.Collections.Concurrent;
 using JordanSdk.Network.Core;
+using Open.Nat;
+using System.Threading;
 
 namespace JordanSdk.Network.Tcp
 {
@@ -16,8 +16,14 @@ namespace JordanSdk.Network.Tcp
     {
         #region Private Fields
 
-        AcceptConnectionState state = new AcceptConnectionState();
+        private Socket listener;
+        private IPEndPoint _localEndpoint;
+        private IPEndPoint _remoteEndpoint;
         private ConcurrentDictionary<RandomId, ISocket> csockets = new ConcurrentDictionary<RandomId, ISocket>();
+
+        private NatDevice nat = null;
+        private Mapping portMap = null;
+
         #endregion
 
         #region Constants
@@ -59,6 +65,11 @@ namespace JordanSdk.Network.Tcp
         /// </summary>
         public string Address { get; set; } = "0.0.0.0";
 
+        /// <summary>
+        /// This property is used for when NAT port mapping / port forwarding is needed. We use Open.Nat which is a great library in order to achieve this. Your implementation needs not to worried about managing port mapping.
+        /// </summary>
+        public bool EnableNatTraversal { get; set; }
+
         #endregion
 
         #region Events
@@ -77,25 +88,48 @@ namespace JordanSdk.Network.Tcp
         /// </summary>
         public void Listen()
         {
+            if (Listening)
+                return;
+            Listening = true;
             var endPoint = new IPEndPoint(IPAddress.Parse(Address), Port);
-            if (endPoint.AddressFamily == AddressFamily.InterNetwork)
-                SetupIPV4(endPoint);
-            else
-                SetupIPV6(endPoint);
-            state.Listener.Bind(endPoint);
-            StartListening();
+            listener = SetupListener(endPoint);
+            listener.Bind(endPoint);
+            if (EnableNatTraversal)
+                StartNatPortMapping();
+            listener.Listen(2000);
+            listener.BeginAccept(new AsyncCallback(AcceptConnection), new AsyncState() { Socket = listener });
         }
+
+        /// <summary>
+        /// Starts listening for incoming connection.
+        /// </summary>
+        public async Task ListenAsync()
+        {
+            if (Listening)
+                return;
+            Listening = true;
+            var endPoint = new IPEndPoint(IPAddress.Parse(Address), Port);
+            listener = SetupListener(endPoint);
+            listener.Bind(endPoint);
+            if (EnableNatTraversal)
+                    await StartNatPortMappingAsync();
+            listener.Listen(2000);
+            listener.BeginAccept(new AsyncCallback(AcceptConnection), new AsyncState() { Socket = listener });
+        }
+
 
         /// <summary>
         /// Stops listening for incoming connections.
         /// </summary>
         public void StopListening()
         {
-                Listening = false;
-                ReleaseClients();
-                state.Listener.Close();
-                state.Listener.Dispose();
-                state.Listener = null;
+            if (disposedValue)
+                throw new ObjectDisposedException("This protocol object has already been disposed.");
+            Listening = false;
+            ReleaseClients();
+            listener?.Close();
+            listener?.Dispose();
+            listener = null;
         }
 
         /// <summary>
@@ -112,10 +146,11 @@ namespace JordanSdk.Network.Tcp
             if (endPoint.AddressFamily == AddressFamily.InterNetworkV6)
                  socket.SetSocketOption(SocketOptionLevel.IPv6, (SocketOptionName)27, false);
             SetupCommonSocketProperties(socket);
-            socket.BeginConnect(endPoint, AsyncConnectCallback, new AsyncCallbackState<TcpSocket>() { Socket = socket, Callback = (tcpSocket)=>
-            {
-                task.SetResult(tcpSocket);
-            }
+            if (EnableNatTraversal)
+                await StartNatPortMappingAsync();
+            socket.BeginConnect(endPoint, AsyncConnectCallback, new AsyncCallbackState<TcpSocket>() { Socket = socket, Callback = (tcpSocket)=> {
+                    task.SetResult(tcpSocket);
+                }
             });
             return await task.Task;
         }
@@ -134,7 +169,12 @@ namespace JordanSdk.Network.Tcp
             if (remoteEndPoint.AddressFamily == AddressFamily.InterNetworkV6)
                 socket.SetSocketOption(SocketOptionLevel.IPv6, (SocketOptionName)27, false);
             SetupCommonSocketProperties(socket);
-            socket.BeginConnect(remoteEndPoint, AsyncConnectCallback, new AsyncCallbackState<TcpSocket>() { Socket = socket, Callback = callback });
+            Task.Run(async () =>
+            {
+                if (EnableNatTraversal)
+                    await StartNatPortMappingAsync();
+                socket.BeginConnect(remoteEndPoint, AsyncConnectCallback, new AsyncCallbackState<TcpSocket>() { Socket = socket, Callback = callback });
+            });
         }
 
         /// <summary>
@@ -150,6 +190,8 @@ namespace JordanSdk.Network.Tcp
             if(endPoint.AddressFamily == AddressFamily.InterNetworkV6)
                  socket.SetSocketOption(SocketOptionLevel.IPv6, (SocketOptionName)27, false);
             SetupCommonSocketProperties(socket);
+            if (EnableNatTraversal)
+                StartNatPortMapping();
             socket.Connect(endPoint);
             return SetupClientToken(socket);
         }
@@ -166,6 +208,22 @@ namespace JordanSdk.Network.Tcp
 
         #region Private Functions
 
+        private async Task StartNatPortMappingAsync()
+        {
+            var disc = new NatDiscoverer();
+            nat = await disc.DiscoverDeviceAsync();
+            portMap = new Mapping(Protocol.Tcp, Port, Port, "Socket Server Map");
+            await nat?.CreatePortMapAsync(portMap);
+        }
+
+        private void StartNatPortMapping()
+        {
+            var disc = new NatDiscoverer();
+            nat = disc.DiscoverDeviceAsync().Result;
+            portMap = new Mapping(Protocol.Tcp, Port, Port, "Socket Server Map");
+            nat?.CreatePortMapAsync(portMap).RunSynchronously();
+        }
+
         private void ReleaseClients()
         {
             Parallel.ForEach(csockets.Values,(socket)=>{
@@ -177,20 +235,14 @@ namespace JordanSdk.Network.Tcp
             });
         }
 
-        private void SetupIPV4(IPEndPoint endPoint)
+        private static Socket SetupListener(IPEndPoint endPoint)
         {
-            state.Listener = new Socket(AddressFamily.InterNetwork,
+            Socket result = new Socket(endPoint.AddressFamily,
                 SocketType.Stream, ProtocolType.Tcp);
-            SetupCommonSocketProperties(state.Listener);
-           
-        }
-
-        private void SetupIPV6(IPEndPoint endPoint)
-        {
-            state.Listener = new Socket(AddressFamily.InterNetworkV6,
-               SocketType.Stream, ProtocolType.Tcp);
-            state.Listener.SetSocketOption(SocketOptionLevel.IPv6, (SocketOptionName)27, false);
-            SetupCommonSocketProperties(state.Listener);
+            if(endPoint.AddressFamily == AddressFamily.InterNetworkV6)
+                result.SetSocketOption(SocketOptionLevel.IPv6, (SocketOptionName)27, false);
+            SetupCommonSocketProperties(result);
+            return result;
         }
 
         private static void SetupCommonSocketProperties(Socket socket)
@@ -205,26 +257,16 @@ namespace JordanSdk.Network.Tcp
             socket.SetIPProtectionLevel(IPProtectionLevel.Unrestricted);
         }
 
-        private void StartListening()
-        {
-            if (Listening)
-                return;
-            Listening = true;
-            state.Listener.Listen(2000);
-            var istate = state.Listener.BeginAccept(new AsyncCallback(AcceptConnection),
-                           state);
-        }
-
         private void AcceptConnection(IAsyncResult ar)
         {
             Socket connected = null;
-            AcceptConnectionState state = (AcceptConnectionState)ar.AsyncState;
-            var _continue = state.Listener?.IsBound;
+            AsyncState state = (AsyncState)ar.AsyncState;
+            var _continue = state.Socket?.IsBound;
             if (!_continue.HasValue || !_continue.Value)
                 return;
             try
             {
-                connected = state.Listener?.EndAccept(ar);
+                connected = state.Socket?.EndAccept(ar);
             }
             catch (ObjectDisposedException) {
                 Listening = false;
@@ -234,7 +276,7 @@ namespace JordanSdk.Network.Tcp
             }
             if (Listening)
             {
-                state.Listener.BeginAccept(new AsyncCallback(AcceptConnection),
+                state.Socket.BeginAccept(new AsyncCallback(AcceptConnection),
                       state);
                 try
                 {
@@ -270,27 +312,7 @@ namespace JordanSdk.Network.Tcp
                 isocket.OnSocketDisconnected -= RemoveSocket;
         }
 
-        #region IDisposable Support / Finalizer
-
-        private bool disposedValue = false; // To detect redundant calls
-
-        protected virtual void Dispose(bool disposing)
-        {
-            if (!disposedValue)
-            {
-                if(disposing && Listening)
-                   StopListening();
-                disposedValue = true;
-            }
-        }
-
-        ~TcpProtocol() {
-            Dispose(false);
-        }
-
-        
-
-        #endregion
+      
 
         private static TcpSocket SetupClientToken(Socket socket)
         {
@@ -328,6 +350,32 @@ namespace JordanSdk.Network.Tcp
                 asyncState.Callback?.Invoke(null);
             }
         }
+
+        #endregion
+
+        #region IDisposable Support / Finalizer
+
+        private bool disposedValue = false; // To detect redundant calls
+
+        protected virtual void Dispose(bool disposing)
+        {
+            if (!disposedValue)
+            {
+                if (disposing && Listening)
+                    StopListening();
+                nat?.DeletePortMapAsync(portMap);
+                portMap = null;
+                nat = null;
+                disposedValue = true;
+            }
+        }
+
+        ~TcpProtocol()
+        {
+            Dispose(false);
+        }
+
+
 
         #endregion
     }

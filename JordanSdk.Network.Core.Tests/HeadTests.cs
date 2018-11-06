@@ -19,7 +19,7 @@ namespace JordanSdk.Network.Core.Tests
         {
             small = TestData.GetDummyStream();
             medium = TestData.GetBigStream();
-            large = TestData.GetHugeStream();
+            large = TestData.GetFairStream();
         }
 
         [TestMethod, TestCategory("Head (Constructor)")]

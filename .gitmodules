@@ -1,0 +1,3 @@
+[submodule "Submodules/Open.NAT"]
+	path = Submodules/Open.NAT
+	url = https://github.com/JordanSolutions/Open.NAT.git
