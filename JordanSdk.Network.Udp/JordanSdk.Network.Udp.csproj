@@ -3,7 +3,7 @@
     <TargetFrameworks>netstandard2.0;net45;net451;net452;net46;net461;net462;net47;net471</TargetFrameworks>
     <PackageId>JordanSDK.Network.Udp</PackageId>
     <Authors>Erik Jordan</Authors>
-    <Product>Jordan SDK Udp Protocol Library</Product>
+    <Product>Jordan SDK UDP Protocol Library</Product>
     <PackageTags>Diagnostics</PackageTags>
     <PackageReleaseNotes></PackageReleaseNotes>
     <Description></Description>
@@ -12,17 +12,7 @@
     <Version>0.9.0-beta1</Version>
     <ApplicationIcon />
     <OutputType>Library</OutputType>
-    <StartupObject />
-  </PropertyGroup>
-  <PropertyGroup>
-    <DocumentationFile>bin\$(Configuration)\$(TargetFramework)\$(AssemblyName).xml</DocumentationFile>
-  </PropertyGroup>
-  <PropertyGroup Condition="'$(Configuration)|$(TargetFramework)|$(Platform)'=='Debug|net461|AnyCPU'">
-    <DefineConstants>DEBUG;TRACE</DefineConstants>
-    <OutputPath></OutputPath>
-  </PropertyGroup>
-  <PropertyGroup Condition="'$(Configuration)|$(TargetFramework)|$(Platform)'=='Release|net461|AnyCPU'">
-    <OutputPath></OutputPath>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="..\JordanSdk.Diagnostic\JordanSdk.Diagnostic.csproj" />

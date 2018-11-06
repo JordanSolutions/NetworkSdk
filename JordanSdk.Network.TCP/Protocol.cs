@@ -23,6 +23,7 @@ namespace JordanSdk.Network.Tcp
 
         private NatDevice nat = null;
         private Mapping portMap = null;
+
         #endregion
 
         #region Constants
@@ -85,7 +86,7 @@ namespace JordanSdk.Network.Tcp
         /// <summary>
         /// Starts listening for incoming connection.
         /// </summary>
-        public async void Listen()
+        public void Listen()
         {
             if (Listening)
                 return;
@@ -93,21 +94,27 @@ namespace JordanSdk.Network.Tcp
             var endPoint = new IPEndPoint(IPAddress.Parse(Address), Port);
             listener = SetupListener(endPoint);
             listener.Bind(endPoint);
-            if(EnableNatTraversal)
-            {
-                try
-                {
-                    await StartNatPortMapping();
-                }
-                catch (NatDeviceNotFoundException ex)
-                {
-                    throw ex;
-                }
-            }
+            if (EnableNatTraversal)
+                StartNatPortMapping();
             listener.Listen(2000);
-            listener.BeginAccept(new AsyncCallback(AcceptConnection),
-                           new AsyncState() { Socket = listener });
+            listener.BeginAccept(new AsyncCallback(AcceptConnection), new AsyncState() { Socket = listener });
+        }
 
+        /// <summary>
+        /// Starts listening for incoming connection.
+        /// </summary>
+        public async Task ListenAsync()
+        {
+            if (Listening)
+                return;
+            Listening = true;
+            var endPoint = new IPEndPoint(IPAddress.Parse(Address), Port);
+            listener = SetupListener(endPoint);
+            listener.Bind(endPoint);
+            if (EnableNatTraversal)
+                    await StartNatPortMappingAsync();
+            listener.Listen(2000);
+            listener.BeginAccept(new AsyncCallback(AcceptConnection), new AsyncState() { Socket = listener });
         }
 
 
@@ -123,7 +130,6 @@ namespace JordanSdk.Network.Tcp
             listener?.Close();
             listener?.Dispose();
             listener = null;
-            nat?.DeletePortMapAsync(portMap);
         }
 
         /// <summary>
@@ -140,10 +146,11 @@ namespace JordanSdk.Network.Tcp
             if (endPoint.AddressFamily == AddressFamily.InterNetworkV6)
                  socket.SetSocketOption(SocketOptionLevel.IPv6, (SocketOptionName)27, false);
             SetupCommonSocketProperties(socket);
-            socket.BeginConnect(endPoint, AsyncConnectCallback, new AsyncCallbackState<TcpSocket>() { Socket = socket, Callback = (tcpSocket)=>
-            {
-                task.SetResult(tcpSocket);
-            }
+            if (EnableNatTraversal)
+                await StartNatPortMappingAsync();
+            socket.BeginConnect(endPoint, AsyncConnectCallback, new AsyncCallbackState<TcpSocket>() { Socket = socket, Callback = (tcpSocket)=> {
+                    task.SetResult(tcpSocket);
+                }
             });
             return await task.Task;
         }
@@ -162,7 +169,12 @@ namespace JordanSdk.Network.Tcp
             if (remoteEndPoint.AddressFamily == AddressFamily.InterNetworkV6)
                 socket.SetSocketOption(SocketOptionLevel.IPv6, (SocketOptionName)27, false);
             SetupCommonSocketProperties(socket);
-            socket.BeginConnect(remoteEndPoint, AsyncConnectCallback, new AsyncCallbackState<TcpSocket>() { Socket = socket, Callback = callback });
+            Task.Run(async () =>
+            {
+                if (EnableNatTraversal)
+                    await StartNatPortMappingAsync();
+                socket.BeginConnect(remoteEndPoint, AsyncConnectCallback, new AsyncCallbackState<TcpSocket>() { Socket = socket, Callback = callback });
+            });
         }
 
         /// <summary>
@@ -178,6 +190,8 @@ namespace JordanSdk.Network.Tcp
             if(endPoint.AddressFamily == AddressFamily.InterNetworkV6)
                  socket.SetSocketOption(SocketOptionLevel.IPv6, (SocketOptionName)27, false);
             SetupCommonSocketProperties(socket);
+            if (EnableNatTraversal)
+                StartNatPortMapping();
             socket.Connect(endPoint);
             return SetupClientToken(socket);
         }
@@ -194,12 +208,20 @@ namespace JordanSdk.Network.Tcp
 
         #region Private Functions
 
-        private async Task StartNatPortMapping()
+        private async Task StartNatPortMappingAsync()
         {
             var disc = new NatDiscoverer();
             nat = await disc.DiscoverDeviceAsync();
             portMap = new Mapping(Protocol.Tcp, Port, Port, "Socket Server Map");
             await nat?.CreatePortMapAsync(portMap);
+        }
+
+        private void StartNatPortMapping()
+        {
+            var disc = new NatDiscoverer();
+            nat = disc.DiscoverDeviceAsync().Result;
+            portMap = new Mapping(Protocol.Tcp, Port, Port, "Socket Server Map");
+            nat?.CreatePortMapAsync(portMap).RunSynchronously();
         }
 
         private void ReleaseClients()
@@ -341,6 +363,9 @@ namespace JordanSdk.Network.Tcp
             {
                 if (disposing && Listening)
                     StopListening();
+                nat?.DeletePortMapAsync(portMap);
+                portMap = null;
+                nat = null;
                 disposedValue = true;
             }
         }

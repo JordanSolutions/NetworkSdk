@@ -48,6 +48,11 @@ namespace JordanSdk.Network.Core
         void Listen();
 
         /// <summary>
+        /// Starts listening for incoming connections over 'Address' and 'Port'.
+        /// </summary>
+        Task ListenAsync();
+
+        /// <summary>
         /// Initiates a client connection.
         /// </summary>
         /// <param name="remoteIp">Remote server IP address to connect to.</param>
