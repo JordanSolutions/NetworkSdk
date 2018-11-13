@@ -14,6 +14,11 @@ namespace JordanSdk.Network.Core
         RandomId Id { get; }
 
         /// <summary>
+        /// This property indicates the connected state of your socket.
+        /// </summary>
+        bool Connected { get; }
+
+        /// <summary>
         /// Event invoked when the connection is lost or closed.
         /// </summary>
         event DisconnectedDelegate OnSocketDisconnected;

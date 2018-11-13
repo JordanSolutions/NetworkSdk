@@ -65,11 +65,6 @@ namespace JordanSdk.Network.Tcp
         /// </summary>
         public string Address { get; set; } = "0.0.0.0";
 
-        /// <summary>
-        /// This property is used for when NAT port mapping / port forwarding is needed. We use Open.Nat which is a great library in order to achieve this. Your implementation needs not to worried about managing port mapping.
-        /// </summary>
-        public bool EnableNatTraversal { get; set; }
-
         #endregion
 
         #region Events
@@ -86,7 +81,8 @@ namespace JordanSdk.Network.Tcp
         /// <summary>
         /// Starts listening for incoming connection.
         /// </summary>
-        public void Listen()
+        /// <param name="enableNatTraversal">Set to true to try and enable NAT traversal via configuring your router for port forwarding.</param>
+        public void Listen(bool enableNatTraversal = false)
         {
             if (Listening)
                 return;
@@ -94,7 +90,7 @@ namespace JordanSdk.Network.Tcp
             var endPoint = new IPEndPoint(IPAddress.Parse(Address), Port);
             listener = SetupListener(endPoint);
             listener.Bind(endPoint);
-            if (EnableNatTraversal)
+            if (enableNatTraversal)
                 StartNatPortMapping();
             listener.Listen(2000);
             listener.BeginAccept(new AsyncCallback(AcceptConnection), new AsyncState() { Socket = listener });
@@ -103,7 +99,8 @@ namespace JordanSdk.Network.Tcp
         /// <summary>
         /// Starts listening for incoming connection.
         /// </summary>
-        public async Task ListenAsync()
+        /// <param name="enableNatTraversal">Set to true to try and enable NAT traversal via configuring your router for port forwarding.</param>
+        public async Task ListenAsync(bool enableNatTraversal = false)
         {
             if (Listening)
                 return;
@@ -111,8 +108,8 @@ namespace JordanSdk.Network.Tcp
             var endPoint = new IPEndPoint(IPAddress.Parse(Address), Port);
             listener = SetupListener(endPoint);
             listener.Bind(endPoint);
-            if (EnableNatTraversal)
-                    await StartNatPortMappingAsync();
+            if (enableNatTraversal)
+                await StartNatPortMappingAsync();
             listener.Listen(2000);
             listener.BeginAccept(new AsyncCallback(AcceptConnection), new AsyncState() { Socket = listener });
         }
@@ -137,8 +134,9 @@ namespace JordanSdk.Network.Tcp
         /// </summary>
         /// <param name="remoteIp">Remote server IP address to connect to.</param>
         /// <param name="remotePort">Remote server IP port to connect to.</param>
+        /// <param name="enableNatTraversal">Set to true to try and enable NAT traversal via configuring your router for port forwarding.</param>
         /// <returns>Returns an instance of TCP Socket</returns>
-        public async Task<TcpSocket> ConnectAsync(string remoteIp, int remotePort)
+        public async Task<TcpSocket> ConnectAsync(string remoteIp, int remotePort, bool enableNatTraversal = false)
         {
             var task = new TaskCompletionSource<TcpSocket>();
             var endPoint = new IPEndPoint(IPAddress.Parse(remoteIp), remotePort);
@@ -146,7 +144,7 @@ namespace JordanSdk.Network.Tcp
             if (endPoint.AddressFamily == AddressFamily.InterNetworkV6)
                  socket.SetSocketOption(SocketOptionLevel.IPv6, (SocketOptionName)27, false);
             SetupCommonSocketProperties(socket);
-            if (EnableNatTraversal)
+            if (enableNatTraversal)
                 await StartNatPortMappingAsync();
             socket.BeginConnect(endPoint, AsyncConnectCallback, new AsyncCallbackState<TcpSocket>() { Socket = socket, Callback = (tcpSocket)=> {
                     task.SetResult(tcpSocket);
@@ -161,8 +159,9 @@ namespace JordanSdk.Network.Tcp
         /// <param name="callback">Callback invoked once the connection is established.</param>
         /// <param name="remoteIp">Remote server IP address to connect to.</param>
         /// <param name="remotePort">Remote server IP port to connect to.</param>
+        /// <param name="enableNatTraversal">Set to true to try and enable NAT traversal via configuring your router for port forwarding.</param>
         /// <returns>Returns an instance of TCP Socket</returns>
-        public void ConnectAsync(Action<TcpSocket> callback, string remoteIp, int remotePort)
+        public void ConnectAsync(Action<TcpSocket> callback, string remoteIp, int remotePort, bool enableNatTraversal = false)
         {
             var remoteEndPoint = new IPEndPoint(IPAddress.Parse(remoteIp), remotePort);
             var socket = new Socket(remoteEndPoint.AddressFamily, SocketType.Stream, ProtocolType.Tcp);
@@ -171,7 +170,7 @@ namespace JordanSdk.Network.Tcp
             SetupCommonSocketProperties(socket);
             Task.Run(async () =>
             {
-                if (EnableNatTraversal)
+                if (enableNatTraversal)
                     await StartNatPortMappingAsync();
                 socket.BeginConnect(remoteEndPoint, AsyncConnectCallback, new AsyncCallbackState<TcpSocket>() { Socket = socket, Callback = callback });
             });
@@ -182,15 +181,16 @@ namespace JordanSdk.Network.Tcp
         /// </summary>
         /// <param name="remoteIp">Remote server IP address to connect to.</param>
         /// <param name="remotePort">Remote server IP port to connect to.</param>
+        /// <param name="enableNatTraversal">Set to true to try and enable NAT traversal via configuring your router for port forwarding.</param>
         /// <returns>Returns an instance of TCP Socket if the connection succeeds.</returns>
-        public TcpSocket Connect(string remoteIp, int remotePort)
+        public TcpSocket Connect(string remoteIp, int remotePort, bool enableNatTraversal = false)
         {
             var endPoint = new IPEndPoint(IPAddress.Parse(remoteIp), remotePort);
             var socket = new Socket(endPoint.AddressFamily, SocketType.Stream, ProtocolType.Tcp);
             if(endPoint.AddressFamily == AddressFamily.InterNetworkV6)
                  socket.SetSocketOption(SocketOptionLevel.IPv6, (SocketOptionName)27, false);
             SetupCommonSocketProperties(socket);
-            if (EnableNatTraversal)
+            if (enableNatTraversal)
                 StartNatPortMapping();
             socket.Connect(endPoint);
             return SetupClientToken(socket);

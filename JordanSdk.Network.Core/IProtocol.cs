@@ -12,17 +12,12 @@ namespace JordanSdk.Network.Core
     {
 
         /// <summary>
-        /// This property is used for when NAT port mapping / port forwarding is needed. We use Open.Nat which is a great library in order to achieve this. Your implementation needs not to worried about managing port mapping.
-        /// </summary>
-        bool EnableNatTraversal { get; set; }
-
-        /// <summary>
-        /// Local port the socket will be bound to. For connection oriented and connectionless protocol, this property is required when creating a server protocol kind. When creating a client socket, this property is ignored for connection oriented protocols, but for connectionless protocols it is advised that a value is set although not required.
+        /// Local port the socket will be bound to. Only required for server protocol instances.
         /// </summary>
         int Port { get; set; }
 
         /// <summary>
-        /// Specifies the IP Address (v4 or v6) to use, defaults to 127.0.0.1 if none specified.
+        /// Specifies the IP Address (v4 or v6) to use or URL in the case of websockets for example, defaults to the loopback (127.0.0.1 / localhost) address.
         /// </summary>
         string Address { get; set; }
 
@@ -45,20 +40,23 @@ namespace JordanSdk.Network.Core
         /// <summary>
         /// Starts listening for incoming connections over 'Address' and 'Port'.
         /// </summary>
-        void Listen();
+        /// <param name="enableNatTraversal">Set to true to try and enable NAT traversal via configuring your router for port forwarding.</param>
+        void Listen(bool enableNatTraversal = false);
 
         /// <summary>
         /// Starts listening for incoming connections over 'Address' and 'Port'.
         /// </summary>
-        Task ListenAsync();
+        /// <param name="enableNatTraversal">Set to true to try and enable NAT traversal via configuring your router for port forwarding.</param>
+        Task ListenAsync(bool enableNatTraversal = false);
 
         /// <summary>
         /// Initiates a client connection.
         /// </summary>
         /// <param name="remoteIp">Remote server IP address to connect to.</param>
         /// <param name="remotePort">Remote server IP port to connect to.</param>
+        /// <param name="enableNatTraversal">Set to true to try and enable NAT traversal via configuring your router for port forwarding.</param>
         /// <returns>Returns an instance of the created client ISocket if the connection was established, null otherwise.</returns>
-        Task<T> ConnectAsync(string remoteIp, int remotePort);
+        Task<T> ConnectAsync(string remoteIp, int remotePort, bool enableNatTraversal = false);
 
         /// <summary>
         /// Initiates a client connection.
@@ -66,16 +64,18 @@ namespace JordanSdk.Network.Core
         /// <param name="callback">Callback invoked once the connection is established. T will be null if the connection did not succeed.</param>
         /// <param name="remoteIp">Remote server IP address to connect to.</param>
         /// <param name="remotePort">Remote server IP port to connect to.</param>
+        /// <param name="enableNatTraversal">Set to true to try and enable NAT traversal via configuring your router for port forwarding.</param>
         /// <returns>Returns an instance of the created client ISocket</returns>
-        void ConnectAsync(Action<T> callback, string remoteIp, int remotePort);
+        void ConnectAsync(Action<T> callback, string remoteIp, int remotePort, bool enableNatTraversal = false);
 
         /// <summary>
         /// Initiates a client connection.
         /// </summary>
         /// <param name="remoteIp">Remote server IP address to connect to.</param>
         /// <param name="remotePort">Remote server IP port to connect to.</param>
+        /// <param name="enableNatTraversal">Set to true to try and enable NAT traversal via configuring your router for port forwarding.</param>
         /// <returns>Returns an instance of the created client ISocket if the connection was established, null otherwise.</returns>
-        T Connect(string remoteIp, int remotePort);
+        T Connect(string remoteIp, int remotePort, bool enableNatTraversal = false);
 
     }
 }
