@@ -1,0 +1,71 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="15.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <Import Project="$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props" Condition="Exists('$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props')" />
+  <PropertyGroup>
+    <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
+    <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
+    <ProjectGuid>{1A0044DE-3919-4DC8-9B6E-A187C75FE29B}</ProjectGuid>
+    <OutputType>Exe</OutputType>
+    <RootNamespace>SocketClient</RootNamespace>
+    <AssemblyName>SocketClient</AssemblyName>
+    <TargetFrameworkVersion>v4.7.1</TargetFrameworkVersion>
+    <FileAlignment>512</FileAlignment>
+    <AutoGenerateBindingRedirects>true</AutoGenerateBindingRedirects>
+    <Deterministic>true</Deterministic>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
+    <PlatformTarget>AnyCPU</PlatformTarget>
+    <DebugSymbols>true</DebugSymbols>
+    <DebugType>full</DebugType>
+    <Optimize>false</Optimize>
+    <OutputPath>bin\Debug\</OutputPath>
+    <DefineConstants>DEBUG;TRACE</DefineConstants>
+    <ErrorReport>prompt</ErrorReport>
+    <WarningLevel>4</WarningLevel>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
+    <PlatformTarget>AnyCPU</PlatformTarget>
+    <DebugType>pdbonly</DebugType>
+    <Optimize>true</Optimize>
+    <OutputPath>bin\Release\</OutputPath>
+    <DefineConstants>TRACE</DefineConstants>
+    <ErrorReport>prompt</ErrorReport>
+    <WarningLevel>4</WarningLevel>
+  </PropertyGroup>
+  <ItemGroup>
+    <Reference Include="System" />
+    <Reference Include="System.Core" />
+    <Reference Include="System.Xml.Linq" />
+    <Reference Include="System.Data.DataSetExtensions" />
+    <Reference Include="Microsoft.CSharp" />
+    <Reference Include="System.Data" />
+    <Reference Include="System.Net.Http" />
+    <Reference Include="System.Xml" />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="Program.cs" />
+    <Compile Include="Properties\AssemblyInfo.cs" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="App.config" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\JordanSdk.Network.Core\JordanSdk.Network.Core.csproj">
+      <Project>{9df0acf3-7261-4536-8c3a-467aa86f0cdb}</Project>
+      <Name>JordanSdk.Network.Core</Name>
+    </ProjectReference>
+    <ProjectReference Include="..\..\JordanSdk.Network.Tcp\JordanSdk.Network.Tcp.csproj">
+      <Project>{63f8b090-17b0-45cc-952a-a9080ab296fc}</Project>
+      <Name>JordanSdk.Network.Tcp</Name>
+    </ProjectReference>
+    <ProjectReference Include="..\..\JordanSdk.Network.Udp\JordanSdk.Network.Udp.csproj">
+      <Project>{e32bcc7f-7b2d-4110-9e9b-1cf433a59125}</Project>
+      <Name>JordanSdk.Network.Udp</Name>
+    </ProjectReference>
+    <ProjectReference Include="..\..\JordanSdk.Network.WebSocket\JordanSdk.Network.WebSocket.csproj">
+      <Project>{09da14d3-63c0-4c6e-947c-70d07c454635}</Project>
+      <Name>JordanSdk.Network.WebSocket</Name>
+    </ProjectReference>
+  </ItemGroup>
+  <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
+</Project>

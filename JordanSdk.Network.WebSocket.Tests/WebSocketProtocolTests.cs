@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
@@ -9,7 +10,6 @@ namespace JordanSdk.Network.WebSocket.Tests
     {
         #region Private Fields
 
-        System.Threading.ManualResetEvent mevent;
         WebSocketProtocol wsProtocol;
         static string hostAddress = "http://localhost/server/";
         static string serverAddress = "ws://localhost/server";
@@ -22,7 +22,6 @@ namespace JordanSdk.Network.WebSocket.Tests
         public void Initialize()
         {
             wsProtocol = new WebSocketProtocol() { Port = PORT, Address = hostAddress };
-            mevent = new System.Threading.ManualResetEvent(true);
         }
 
         [TestCleanup]
@@ -61,6 +60,7 @@ namespace JordanSdk.Network.WebSocket.Tests
         [TestMethod(), TestCategory("Web Socket Protocol (Connect)")]
         public void ConnectAsyncCallbackTest()
         {
+            ManualResetEventSlim mevent = new ManualResetEventSlim(false);
             mevent.Reset();
             try
             {
@@ -72,7 +72,7 @@ namespace JordanSdk.Network.WebSocket.Tests
                     connected = socket.Connected;
                     mevent.Set();
                 }, serverAddress, PORT);
-                mevent.WaitOne(10000);
+                mevent.Wait(1000);
                 Assert.IsTrue(condition: connected, message: "A connection could not be established.");
             }
             catch (Exception ex)
@@ -108,7 +108,7 @@ namespace JordanSdk.Network.WebSocket.Tests
             {
                 wsProtocol.Listen();
                 WebSocketProtocol ipvClient = this.CreateWSClientProtocol();
-                WebSocket socket = ipvClient.Connect(serverAddress, PORT);
+                var socket = ipvClient.Connect(serverAddress, PORT);
                 Assert.IsTrue(socket.Connected, "A connection could not be established.");
             }
             catch (Exception ex)
@@ -120,6 +120,7 @@ namespace JordanSdk.Network.WebSocket.Tests
         [TestMethod(), TestCategory("Web Socket Protocol (On Connection Requested Event)")]
         public void OnConnectionRequestedTest()
         {
+            ManualResetEventSlim mevent = new ManualResetEventSlim(false);
             wsProtocol.Listen();
             mevent.Reset();
             bool eventInvoked = false;
@@ -129,8 +130,8 @@ namespace JordanSdk.Network.WebSocket.Tests
                 mevent.Set();
             };
             WebSocketProtocol ipvClient = this.CreateWSClientProtocol();
-            WebSocket clientSocket = ipvClient.Connect(serverAddress, PORT);
-            mevent.WaitOne(10000);
+            var clientSocket = ipvClient.Connect(serverAddress, PORT);
+            mevent.Wait(10000);
             Assert.IsTrue(eventInvoked);
         }
     }
