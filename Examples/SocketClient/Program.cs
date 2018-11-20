@@ -35,7 +35,7 @@ namespace SocketClient
             {
                 return PrintHelp();
             }
-            else if ((args.Length > 0 && ProcessArgs(args)) || VerifyProtocolSelection() > 0)
+            else if ((args.Length > 0 && ProcessArgs(args)) || RequestInput() > 0)
             {
                 if (StartClient().Result)
                 {
@@ -55,7 +55,7 @@ namespace SocketClient
 
         #region Connection Parameter Input
 
-        private static int VerifyProtocolSelection()
+        private static int RequestInput()
         {
             Console.WriteLine("Please select your connection protocol.");
             Console.WriteLine("For TCP, type \"tcp\" (without quotes) and press enter.");
