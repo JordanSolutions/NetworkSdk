@@ -14,7 +14,7 @@ namespace JordanSdk.Network.Udp
     /// <summary>
     /// This class is the UDP implementation of IProtocol, simplifies UDP network management for all possible operations such as listening, accepting incoming connections, connecting as a client to a remote server and much more.
     /// </summary>
-    public class UdpProtocol : IProtocol<UdpSocket>, IDisposable
+    public class UdpProtocol : IProtocol
     {
 
         #region Private Fields
@@ -66,12 +66,7 @@ namespace JordanSdk.Network.Udp
         /// Use this property for specifying the local Interface to bind to either for server or client connections. Defaults to IPV4, Any IP address (0.0.0.0).
         /// Examples: IPV4 Local Host - '127.0.0.1', IPV6 Local Host - '::1'
         /// </summary>
-        public string Address { get; set; } = "0.0.0.0";
-
-        /// <summary>
-        /// This property is used for when NAT port mapping / port forwarding is needed. We use Open.Nat which is a great library in order to achieve this. Your implementation needs not to worried about managing port mapping.
-        /// </summary>
-        public bool EnableNatTraversal { get; set; }
+        public string Address { get; set; } = "127.0.0.1";
 
         #endregion
 
@@ -106,13 +101,14 @@ namespace JordanSdk.Network.Udp
         /// <summary>
         /// Starts listening for incoming connection.
         /// </summary>
-        public void Listen()
+        /// <param name="enableNatTraversal">Set to true to try and enable NAT traversal via configuring your router for port forwarding.</param>
+        public void Listen(bool enableNatTraversal = false)
         {
             if (Listening)
                 return;
             _localEndpoint = new IPEndPoint(IPAddress.Parse(Address), Port);
             listener = Setup(_localEndpoint);
-            if (EnableNatTraversal)
+            if (enableNatTraversal)
                 StartNatPortMapping();
             StartListening(listener);
         }
@@ -120,13 +116,14 @@ namespace JordanSdk.Network.Udp
         /// <summary>
         /// Starts listening for incoming connection.
         /// </summary>
-        public async Task ListenAsync()
+        /// <param name="enableNatTraversal">Set to true to try and enable NAT traversal via configuring your router for port forwarding.</param>
+        public async Task ListenAsync(bool enableNatTraversal = false)
         {
             if (Listening)
                 return;
             _localEndpoint = new IPEndPoint(IPAddress.Parse(Address), Port);
             listener = Setup(_localEndpoint);
-            if (EnableNatTraversal)
+            if (enableNatTraversal)
                 await StartNatPortMappingAsync();
             StartListening(listener);
         }
@@ -150,13 +147,14 @@ namespace JordanSdk.Network.Udp
         /// </summary>
         /// <param name="remoteIp">Remote server IP address to connect to.</param>
         /// <param name="remotePort">Remote server IP port to connect to.</param>
+        /// <param name="enableNatTraversal">Set to true to try and enable NAT traversal via configuring your router for port forwarding.</param>
         /// <returns>Returns an instance of TCP Socket</returns>
-        public async Task<UdpSocket> ConnectAsync(string remoteIp, int remotePort)
+        public async Task<ISocket> ConnectAsync(string remoteIp, int remotePort, bool enableNatTraversal = false)
         {
             var remoteEndPoint = new IPEndPoint(IPAddress.Parse(remoteIp), remotePort);
             _localEndpoint = new IPEndPoint(IPAddress.Parse(Address ?? (remoteEndPoint.AddressFamily == AddressFamily.InterNetwork ? "127.0.0.1" : "::1")), Port);
             Socket socket = Setup(_localEndpoint);
-            if (EnableNatTraversal)
+            if (enableNatTraversal)
                 await StartNatPortMappingAsync();
             return await SetupClientToken(socket, remoteEndPoint);
         }
@@ -166,9 +164,10 @@ namespace JordanSdk.Network.Udp
         /// <param name="callback">Callback invoked once the connection is established.</param>
         /// <param name="remoteIp">Remote server IP address to connect to.</param>
         /// <param name="remotePort">Remote server IP port to connect to.</param>
+        /// <param name="enableNatTraversal">Set to true to try and enable NAT traversal via configuring your router for port forwarding.</param>
         /// </summary>
         /// <returns>Returns an instance of TCP Socket</returns>
-        public void ConnectAsync(Action<UdpSocket> callback, string remoteIp, int remotePort)
+        public void ConnectAsync(Action<ISocket> callback, string remoteIp, int remotePort, bool enableNatTraversal = false)
         {
             Task.Run(async () =>
             {
@@ -177,7 +176,7 @@ namespace JordanSdk.Network.Udp
 
                 Socket socket = Setup(_localEndpoint);
                 var result = await SetupClientToken(socket, remoteEndPoint);
-                if (EnableNatTraversal)
+                if (enableNatTraversal)
                     await StartNatPortMappingAsync();
                 if (result != null)
                     callback?.Invoke(result);
@@ -189,15 +188,16 @@ namespace JordanSdk.Network.Udp
         /// Initiates a synchronous connection to a remote server.
         /// <param name="remoteIp">Remote server IP address to connect to.</param>
         /// <param name="remotePort">Remote server IP port to connect to.</param>
+        /// <param name="enableNatTraversal">Set to true to try and enable NAT traversal via configuring your router for port forwarding.</param>
         /// </summary>
         /// <returns>Returns an instance of TCP Socket</returns>
-        public UdpSocket Connect(string remoteIp, int remotePort)
+        public ISocket Connect(string remoteIp, int remotePort, bool enableNatTraversal = false)
         {
             var remoteEndPoint = new IPEndPoint(IPAddress.Parse(remoteIp), remotePort);
             _localEndpoint = new IPEndPoint(IPAddress.Parse(string.IsNullOrWhiteSpace(Address) ? (remoteEndPoint.AddressFamily == AddressFamily.InterNetwork ? "127.0.0.1" : "::1") : Address), Port);
             Socket socket = Setup(_localEndpoint);
             var result = SetupClientToken(socket, remoteEndPoint).Result;
-            if (EnableNatTraversal)
+            if (enableNatTraversal)
                 StartNatPortMapping();
             return result;
         }
@@ -277,6 +277,16 @@ namespace JordanSdk.Network.Udp
                     succeed = CollectSocket(senderIp as IPEndPoint, out client);
                 else
                     Diagnostic.DiagnosticCenter.Instance.Log?.LogException(new ArgumentException(succeed ? "Unable to setup the client connection request." : "UDP Connection request should be one byte long"));
+            }catch(System.Net.Sockets.SocketException ex)
+            {
+                /*
+                 * Ignoring 10040, this exception happens often when client and server are on the same machine using the same IP address and port and this loop 
+                 * receives data larger than the initial expected connection buffer size.
+                 * Also any incoming UDP package that is larger than the connection expected size will be ignored and discarded.
+                 */
+                if (ex.ErrorCode != 10040)
+                    Diagnostic.DiagnosticCenter.Instance.Log?.LogException(ex);
+
             }
             catch (ObjectDisposedException)
             {
@@ -294,7 +304,7 @@ namespace JordanSdk.Network.Udp
             if (succeed)
                 OnConnectionRequested?.Invoke(client);
             else
-                Diagnostic.DiagnosticCenter.Instance.Log?.LogException(new ArgumentException(succeed ? "Unable to setup the client connection request." : "UDP Connection request should be one byte long"));
+                Diagnostic.DiagnosticCenter.Instance.Log?.LogException(new Exception(succeed ? "Unable to setup the client connection request." : "UDP Connection request should be one byte long"));
         }
 
 

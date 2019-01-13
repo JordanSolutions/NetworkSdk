@@ -1,10 +1,10 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <TargetFrameworks>netstandard2.0;net45;net451;net452;net46;net461;net462;net47;net471</TargetFrameworks>
-    <PackageId>JordanSDK.Network.Tcp</PackageId>
+    <PackageId>JordanSDK.Network.WebSocket</PackageId>
     <Authors>Erik Jordan</Authors>
-    <Product>Jordan SDK TCP Protocol Library</Product>
-    <PackageTags>TCP Sockets Network</PackageTags>
+    <Product>Jordan SDK Websocket Protocol Library</Product>
+    <PackageTags>Web Sockets Network</PackageTags>
     <PackageReleaseNotes></PackageReleaseNotes>
     <Description></Description>
     <NeutralLanguage>en</NeutralLanguage>
@@ -17,6 +17,7 @@
   <ItemGroup>
     <ProjectReference Include="..\JordanSdk.Diagnostic\JordanSdk.Diagnostic.csproj" />
     <ProjectReference Include="..\JordanSdk.Network.Core\JordanSdk.Network.Core.csproj" />
+    <ProjectReference Include="..\Submodules\Open.NAT\Open.Nat\Open.Nat.csproj" />
   </ItemGroup>
   <ItemGroup Condition="'$(TargetFramework)'!='netstandard2.0'">
     <Reference Include="System" />
@@ -27,9 +28,7 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
-    <ProjectReference Include="..\Submodules\Open.NAT\Open.Nat\Open.Nat.csproj" />
-  </ItemGroup>
-  <ItemGroup>
     <PackageReference Include="TaskParallelLibrary" Version="1.0.2856.0" Condition="'$(TargetFramework)'=='net35'" />
   </ItemGroup>
+
 </Project>

@@ -6,6 +6,7 @@ using System.Net;
 using System.Linq;
 using System.Net.Sockets;
 using System.Collections.Generic;
+using System.Threading;
 
 namespace JordanSdk.Network.Udp.Tests
 {
@@ -14,10 +15,9 @@ namespace JordanSdk.Network.Udp.Tests
     {
         #region Private Fields
 
-        System.Threading.ManualResetEvent mevent;
         UdpProtocol ipv4Protocol;
         UdpProtocol ipv6Protocol;
-        List<UdpSocket> sockets = new List<UdpSocket>();
+        List<ISocket> sockets = new List<ISocket>();
         static string serverAddress = "";
         static string clientAddress = "";
         static string ipv6ServerAddress = "[::]";
@@ -51,7 +51,6 @@ namespace JordanSdk.Network.Udp.Tests
             ipv6Protocol = new UdpProtocol();
             ipv6Protocol.Port = PORT;
             ipv6Protocol.Address = ipv6ServerAddress;
-            mevent = new System.Threading.ManualResetEvent(true);
         }
 
         [TestCleanup]
@@ -117,18 +116,19 @@ namespace JordanSdk.Network.Udp.Tests
         [TestMethod(), TestCategory("UDPProcotol (Connect)")]
         public void ConnectAsyncIPV4CallbackTest()
         {
+            ManualResetEventSlim mevent = new ManualResetEventSlim(false);
             mevent.Reset();
             try
             {
                 ipv4Protocol.Listen();
                 UdpProtocol ipvClient = this.CreateIPV4ClientProtocol(clientAddress);
-                UdpSocket udpSocket = null;
+                ISocket udpSocket = null;
                 ipvClient.ConnectAsync((socket) =>
                 {
                     udpSocket = socket;
                     mevent.Set();
                 },serverAddress,PORT);
-                Assert.IsTrue(mevent.WaitOne(10000), "Connection callback never triggered callback.");
+                Assert.IsTrue(mevent.Wait(10000), "Connection callback never triggered callback.");
                 sockets.Add(udpSocket);
                 Assert.IsNotNull(udpSocket, "A connection could not be established.");
                 Assert.IsTrue(udpSocket.Connected, "A connection could not be established.");
@@ -142,18 +142,19 @@ namespace JordanSdk.Network.Udp.Tests
         [TestMethod(), TestCategory("UDPProcotol (Connect)")]
         public void ConnectAsyncIPV6CallbackTest()
         {
+            ManualResetEventSlim mevent = new ManualResetEventSlim(false);
             mevent.Reset();
             try
             {
                 ipv6Protocol.Listen();
                 UdpProtocol ipvClient = this.CreateIPV6ClientProtocol(ipv6ServerAddress);
-                UdpSocket udpSocket = null;
+                ISocket udpSocket = null;
                 ipvClient.ConnectAsync((socket) =>
                 {
                     udpSocket = socket;
                     mevent.Set();
                 }, ipv6ServerAddress, PORT);
-                Assert.IsTrue(mevent.WaitOne(10000), "Connection never triggered callback.");
+                Assert.IsTrue(mevent.Wait(10000), "Connection never triggered callback.");
                 sockets.Add(udpSocket);
                 Assert.IsNotNull(udpSocket, "Callback did not receive a socket.");
                 Assert.IsTrue(udpSocket.Connected, "A connection could not be established.");
@@ -243,6 +244,7 @@ namespace JordanSdk.Network.Udp.Tests
         public void OnConnectionRequestedTest()
         {
             ipv4Protocol.Listen();
+            ManualResetEventSlim mevent = new ManualResetEventSlim(false);
             mevent.Reset();
             bool eventInvoked = false;
             ipv4Protocol.OnConnectionRequested += (socket) =>
@@ -251,10 +253,11 @@ namespace JordanSdk.Network.Udp.Tests
                 mevent.Set();
             };
             UdpProtocol ipvClient = this.CreateIPV4ClientProtocol(clientAddress);
-            UdpSocket clientSocket = ipvClient.Connect(serverAddress, PORT);
+            ISocket clientSocket = ipvClient.Connect(serverAddress, PORT);
             sockets.Add(clientSocket);
 
             clientSocket.Send(TestData.GetDummyStream().ToArray());
+            mevent.Wait(1000);
             Assert.IsTrue(clientSocket.Connected, "A socket connection was not established.");
             Assert.IsTrue(eventInvoked, "On Connection Requested event was not invoked");
         }

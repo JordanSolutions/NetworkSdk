@@ -8,6 +8,7 @@ using System.Threading.Tasks;
 using System.Net.Sockets;
 using JordanSdk.Network.Core;
 using System.Net;
+using System.Threading;
 
 namespace JordanSdk.Network.Udp.Tests
 {
@@ -20,13 +21,12 @@ namespace JordanSdk.Network.Udp.Tests
     public class UdpSocketTests
     {
 
-
         #region Fields
-        System.Threading.ManualResetEvent mevent;
+       
         static UdpProtocol ipv4Server;
         static UdpProtocol ipv6Server;
-        static UdpSocket ipv4Client;
-        static UdpSocket ipv6Client;
+        static ISocket ipv4Client;
+        static ISocket ipv6Client;
         static ISocket ipv4ServerClient;
         static ISocket ipv6ServerClient;
         static string serverAddress = "";
@@ -36,16 +36,15 @@ namespace JordanSdk.Network.Udp.Tests
         List<ISocket> sockets = new List<ISocket>();
         #endregion
 
-
-
         #region Test / Class Initialization
 
 
         [TestInitialize]
         public void Initialize()
         {
-           
-            mevent = new System.Threading.ManualResetEvent(false);
+
+            ManualResetEventSlim mevent = new ManualResetEventSlim(false);
+
             ipv4Server = new UdpProtocol();
             ipv4Server.Address = serverAddress;
             ipv4Server.Port = PORT;
@@ -66,9 +65,10 @@ namespace JordanSdk.Network.Udp.Tests
                 mevent.Set();
             };
             ipv4Client = this.CreateIPV4ClientProtocol(clientAddress).Connect(serverAddress, PORT);
-            mevent.WaitOne(1000);
+            mevent.Wait(1000);
+            mevent.Reset();
             ipv6Client = this.CreateIPV6ClientProtocol(null).Connect(ipv6ServerAddress, PORT);
-            mevent.WaitOne(1000);
+            mevent.Wait(1000);
         }
 
         [TestCleanup]
@@ -145,7 +145,6 @@ namespace JordanSdk.Network.Udp.Tests
         {
             try
             {
-              
                 NetworkBuffer buffer = TestData.GetLargeBuffer();
                 int sent = 0;
                 byte[] sentData = null;
@@ -169,6 +168,7 @@ namespace JordanSdk.Network.Udp.Tests
             try
             {
 
+                ManualResetEventSlim mevent = new ManualResetEventSlim(false);
                 NetworkBuffer buffer = TestData.GetDummyStream();
                 mevent.Reset();
                 int bytesSent = 0;
@@ -180,7 +180,7 @@ namespace JordanSdk.Network.Udp.Tests
                     mevent.Set();
 
                 });
-                mevent.WaitOne();
+                mevent.Wait(1000);
                 Assert.AreEqual(buffer.Size, bytesSent, "Not all bytes were sent");
             }
             catch (Exception ex)
@@ -194,6 +194,7 @@ namespace JordanSdk.Network.Udp.Tests
         {
             try
             {
+                ManualResetEventSlim mevent = new ManualResetEventSlim(false);
                 NetworkBuffer buffer = TestData.GetMidSizeBuffer();
                 byte[] sentData = null;
                 int bytesSent = 0;
@@ -207,7 +208,7 @@ namespace JordanSdk.Network.Udp.Tests
                         mevent.Set();
 
                     });
-                    mevent.WaitOne(1000);
+                    mevent.Wait(1000);
                 }
                 Assert.AreEqual(buffer.Size, bytesSent, "Not all bytes were sent");
             }
@@ -223,6 +224,7 @@ namespace JordanSdk.Network.Udp.Tests
             try
             {
 
+                ManualResetEventSlim mevent = new ManualResetEventSlim(false);
                 NetworkBuffer buffer = TestData.GetLargeBuffer();
                 byte[] sentData = null;
                 int bytesSent = 0;
@@ -236,7 +238,7 @@ namespace JordanSdk.Network.Udp.Tests
                         mevent.Set();
 
                     });
-                    mevent.WaitOne(1000);
+                    mevent.Wait(1000);
                 }
                 Assert.AreEqual(buffer.Size, bytesSent, "Not all bytes were sent");
             }
@@ -331,6 +333,7 @@ namespace JordanSdk.Network.Udp.Tests
         [TestMethod(), TestCategory("UdpSocket (Disconnect)")]
         public void AsyncCallbackDisconnectTest()
         {
+            ManualResetEventSlim mevent = new ManualResetEventSlim(false);
             mevent.Reset();
             var socket = this.CreateIPV4ClientProtocol(clientAddress).Connect(serverAddress, PORT);
             Assert.IsNotNull(socket);
@@ -339,14 +342,13 @@ namespace JordanSdk.Network.Udp.Tests
             {
                 mevent.Set();
             });
-            mevent.WaitOne();
+            mevent.Wait(1000);
             Assert.IsFalse(socket.Connected, "The connection is still open.");
         }
 
         [TestMethod(), TestCategory("UdpSocket (Receive)")]
         public void ReceiveTest()
         {
-            mevent.Reset();
             Task.Run(async () => { await Task.Delay(20); ipv4ServerClient.Send(TestData.GetDummyStream().ToArray()); });
             byte[] buffer = ipv4Client.Receive();
             Assert.IsNotNull(buffer);
@@ -365,6 +367,7 @@ namespace JordanSdk.Network.Udp.Tests
         [TestMethod(), TestCategory("UdpSocket (Receive)")]
         public void AsyncCallbackReceiveTest()
         {
+            ManualResetEventSlim mevent = new ManualResetEventSlim(false);
             var sentAsync = Task.Run(async () => { await Task.Delay(20); ipv4ServerClient.Send(TestData.GetDummyStream().ToArray()); });
             byte[] received = null;
             mevent.Reset();
@@ -373,16 +376,12 @@ namespace JordanSdk.Network.Udp.Tests
                 received = buffer;
                 mevent.Set();
             });
-            mevent.WaitOne();
+            mevent.Wait(1000);
             Assert.IsNotNull(received);
             Assert.IsTrue(received.Length > 0);
         }
 
 
-        #endregion
-
-        #region Helper Tools
-       
         #endregion
     }
 }

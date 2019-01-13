@@ -1,16 +1,15 @@
 ﻿using Microsoft.VisualStudio.TestTools.UnitTesting;
-using JordanSdk.Network.Tcp;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using System.Threading;
 using System.Net.Sockets;
 using JordanSdk.Network.Core;
 using System.Net;
-using System.Threading;
 
-namespace JordanSdk.Network.Tcp.Tests
+namespace JordanSdk.Network.WebSocket.Tests
 {
     [TestClass()]
     public class TCPSocketTests
@@ -19,17 +18,14 @@ namespace JordanSdk.Network.Tcp.Tests
         static byte[] BIG_BUFFER_DATA;
         static byte[] HUGE_BUFFER_DATA;
 
-       
-        static TcpProtocol ipv4Server;
-        static TcpProtocol ipv6Server;
+        static WebSocketProtocol ipv4Server;
         static ISocket ipv4Client;
-        static ISocket ipv6Client;
 
         static ISocket ipv4ServerClient;
-        static ISocket ipv6ServerClient;
 
-        static string serverAddress = "";
-        string ipv6ServerAddress = "::1";
+        static string hostAddress = "http://localhost/server/";
+        static string serverAddress = "ws://localhost/server";
+
         const int PORT = 4884;
         #endregion
 
@@ -37,56 +33,33 @@ namespace JordanSdk.Network.Tcp.Tests
         [TestInitialize]
         public void Initialize()
         {
-            ManualResetEventSlim mevent = new ManualResetEventSlim(false);
-            ipv4Server = new TcpProtocol();
+
+            ManualResetEvent mevent = new ManualResetEvent(false);
+            ipv4Server = new WebSocketProtocol() { Port = PORT, Address = hostAddress };
             ipv4Server.Port = PORT;
             ipv4Server.OnConnectionRequested += (socket) =>
             {
                 ipv4ServerClient = socket;
                 mevent.Set();
             };
-            ipv4Server.Address = serverAddress;
             ipv4Server.Listen();
-            ipv6Server = new TcpProtocol();
-            ipv6Server.Port = PORT;
-            ipv6Server.Address = IPAddress.IPv6Any.ToString();
             mevent.Reset();
-            ipv6Server.OnConnectionRequested += (socket) =>
-            {
-                ipv6ServerClient = socket;
-                mevent.Set();
-            };
-            ipv6Server.Listen();
-            ipv4Client = this.CreateIPV4ClientProtocol().Connect(serverAddress,PORT);
-            mevent.Wait(1000);
-            mevent.Reset();
-            ipv6Client = this.CreateIPV6ClientProtocol().Connect(ipv6ServerAddress , PORT);
-            mevent.Wait(1000);
-
+           
+            ipv4Client = this.CreateWSClientProtocol().Connect(serverAddress,PORT);
+            mevent.WaitOne(1000);
         }
 
         [TestCleanup]
         public void TestCleanup()
         {
             ipv4Client.Disconnect();
-            ipv6Client.Disconnect();
             ipv4Server.StopListening();
             ipv4Server.Dispose();
-            ipv6Server.StopListening();
-            ipv6Server.Dispose();
         }
 
         [ClassInitialize]
         public static void ClassInitialized(TestContext context)
         {
-            //Based on multiple IP addresses configured in the network adapter.
-
-            var selected = Dns.GetHostEntry(Dns.GetHostName()).AddressList.Where(p => {
-                return p.AddressFamily == AddressFamily.InterNetwork;
-            }).Select(p => p.ToString());
-
-            serverAddress = selected.First();
-            
 
             BIG_BUFFER_DATA = new byte[3000];
             Random rnd = new Random();
@@ -100,7 +73,7 @@ namespace JordanSdk.Network.Tcp.Tests
 
         #region Test Cases
 
-        [TestMethod(), TestCategory("TCPSocket (Send)")]
+        [TestMethod(), TestCategory("Web Sockets (Send)")]
         public void SynchronousIPV4SendSmallBufferTest()
         {
             try
@@ -115,7 +88,7 @@ namespace JordanSdk.Network.Tcp.Tests
             }
         }
 
-        [TestMethod(), TestCategory("TCPSocket (Send)")]
+        [TestMethod(), TestCategory("Web Sockets (Send)")]
         public void SynchronousIPV4SendMidSizeBufferTest()
         {
             try
@@ -125,7 +98,7 @@ namespace JordanSdk.Network.Tcp.Tests
 
                 int sent = 0;
                 byte[] sentData = null;
-                while (null != (sentData = buffer.Read(TcpProtocol.BUFFER_SIZE)))
+                while (null != (sentData = buffer.Read(WebSocketProtocol.BUFFER_SIZE)))
                 {
                     sent += ipv4Client.Send(sentData);
                     var task = ipv4ServerClient.ReceiveAsync();
@@ -138,7 +111,7 @@ namespace JordanSdk.Network.Tcp.Tests
             }
         }
 
-        [TestMethod(), TestCategory("TCPSocket (Send)")]
+        [TestMethod(), TestCategory("Web Sockets (Send)")]
         public void SynchronousIPV4SendLargeBufferTest()
         {
             try
@@ -147,7 +120,7 @@ namespace JordanSdk.Network.Tcp.Tests
                 NetworkBuffer buffer = TestData.GetMidSizeBuffer();
                 int sent = 0;
                 byte[] sentData = null;
-                while (null != (sentData = buffer.Read(TcpProtocol.BUFFER_SIZE)))
+                while (null != (sentData = buffer.Read(WebSocketProtocol.BUFFER_SIZE)))
                 {
                     sent += ipv4Client.Send(sentData);
                     var task = ipv4ServerClient.ReceiveAsync();
@@ -161,14 +134,13 @@ namespace JordanSdk.Network.Tcp.Tests
         }
 
 
-        [TestMethod(), TestCategory("TCPSocket (Send)")]
+        [TestMethod(), TestCategory("Web Sockets (Send)")]
         public void AsyncCallbackIPV4SendSmallBufferTest()
         {
             try
             {
                 ManualResetEventSlim mevent = new ManualResetEventSlim(false);
                 NetworkBuffer buffer = TestData.GetDummyStream();
-                mevent.Reset();
                 int bytesSent = 0;
 
                 ipv4Client.SendAsync(buffer.ToArray(), (sent) =>
@@ -178,7 +150,7 @@ namespace JordanSdk.Network.Tcp.Tests
                     mevent.Set();
 
                 });
-                mevent.Wait(10000);
+                mevent.Wait(1000);
                 Assert.AreEqual(buffer.Size, bytesSent, "Not all bytes were sent");
             }
             catch (Exception ex)
@@ -187,17 +159,17 @@ namespace JordanSdk.Network.Tcp.Tests
             }
         }
 
-        [TestMethod(), TestCategory("TCPSocket (Send)")]
+        [TestMethod(), TestCategory("Web Sockets (Send)")]
         public void AsyncCallbackIPV4SendMidSizeBufferTest()
         {
             try
             {
 
-                ManualResetEventSlim mevent = new ManualResetEventSlim(false);
                 NetworkBuffer buffer = TestData.GetLargeBuffer();
                 byte[] sentData = null;
                 int bytesSent = 0;
-                while (null != (sentData = buffer.Read(TcpProtocol.BUFFER_SIZE)))
+                ManualResetEventSlim mevent = new ManualResetEventSlim(false);
+                while (null != (sentData = buffer.Read(WebSocketProtocol.BUFFER_SIZE)))
                 {
                     mevent.Reset();
                     ipv4Client.SendAsync(sentData, (sent) =>
@@ -217,16 +189,18 @@ namespace JordanSdk.Network.Tcp.Tests
             }
         }
 
-        [TestMethod(), TestCategory("TCPSocket (Send)")]
+        [TestMethod(), TestCategory("Web Sockets (Send)")]
         public void AsyncCallbackIPV4SendLargeBufferTest()
         {
             try
             {
-                ManualResetEventSlim mevent = new ManualResetEventSlim(false);
+
                 NetworkBuffer buffer = TestData.GetMidSizeBuffer();
                 byte[] sentData = null;
                 int bytesSent = 0;
-                while ((sentData = buffer.Read(TcpProtocol.BUFFER_SIZE)) != null)
+                ManualResetEventSlim mevent = new ManualResetEventSlim(false);
+
+                while ((sentData = buffer.Read(WebSocketProtocol.BUFFER_SIZE)) != null)
                 {
                     mevent.Reset();
                     ipv4Client.SendAsync(sentData, (sent) =>
@@ -247,7 +221,7 @@ namespace JordanSdk.Network.Tcp.Tests
         }
 
 
-        [TestMethod(), TestCategory("TCPSocket (Send)")]
+        [TestMethod(), TestCategory("Web Sockets (Send)")]
         public async Task AsyncTaskIPV4SendSmallBufferTest()
         {
             try
@@ -264,7 +238,7 @@ namespace JordanSdk.Network.Tcp.Tests
             }
         }
 
-        [TestMethod(), TestCategory("TCPSocket (Send)")]
+        [TestMethod(), TestCategory("Web Sockets (Send)")]
         public async Task AsyncTaskIPV4SendMidSizeBufferTest()
         {
             try
@@ -274,7 +248,7 @@ namespace JordanSdk.Network.Tcp.Tests
 
                 byte[] sentData = null;
                 int bytesSent = 0;
-                while (null != (sentData = buffer.Read(TcpProtocol.BUFFER_SIZE)))
+                while (null != (sentData = buffer.Read(WebSocketProtocol.BUFFER_SIZE)))
                 {
                     bytesSent += await ipv4Client.SendAsync(sentData);
                     var task = ipv4ServerClient.ReceiveAsync();
@@ -287,7 +261,7 @@ namespace JordanSdk.Network.Tcp.Tests
             }
         }
 
-        [TestMethod(), TestCategory("TCPSocket (Send)")]
+        [TestMethod(), TestCategory("Web Sockets (Send)")]
         public async Task AsyncTaskIPV4SendLargeBufferTest()
         {
             try
@@ -296,7 +270,7 @@ namespace JordanSdk.Network.Tcp.Tests
                 NetworkBuffer buffer = TestData.GetMidSizeBuffer();
                 byte[] sentData = null;
                 int bytesSent = 0;
-                while (null != (sentData = buffer.Read(TcpProtocol.BUFFER_SIZE)))
+                while (null != (sentData = buffer.Read(WebSocketProtocol.BUFFER_SIZE)))
                 {
                     bytesSent += await ipv4Client.SendAsync(sentData);
                     var task = ipv4ServerClient.ReceiveAsync();
@@ -309,30 +283,29 @@ namespace JordanSdk.Network.Tcp.Tests
             }
         }
 
-        [TestMethod(), TestCategory("TCPSocket (Disconnect)")]
+        [TestMethod(), TestCategory("Web Sockets (Disconnect)")]
         public void DisconnectTest()
         {
-            var socket = this.CreateIPV4ClientProtocol().Connect(serverAddress,PORT);
+            var socket = this.CreateWSClientProtocol().Connect(serverAddress,PORT);
             Assert.IsTrue(socket.Connected, "Test is invalid because a connection could not be established.");
             socket.Disconnect();
             Assert.IsFalse(socket.Connected, "The connection is still open.");
         }
 
-        [TestMethod(), TestCategory("TCPSocket (Disconnect)")]
+        [TestMethod(), TestCategory("Web Sockets (Disconnect)")]
         public async Task AsyncTaskDisconnectTest()
         {
-            var socket = this.CreateIPV4ClientProtocol().Connect(serverAddress,PORT);
+            var socket = this.CreateWSClientProtocol().Connect(serverAddress,PORT);
             Assert.IsTrue(socket.Connected, "Test is invalid because a connection could not be established.");
             await socket.DisconnectAsync();
             Assert.IsFalse(socket.Connected, "The connection is still open.");
         }
 
-        [TestMethod(), TestCategory("TCPSocket (Disconnect)")]
+        [TestMethod(), TestCategory("Web Sockets (Disconnect)")]
         public void AsyncCallbackDisconnectTest()
         {
             ManualResetEventSlim mevent = new ManualResetEventSlim(false);
-            mevent.Reset();
-            var socket = this.CreateIPV4ClientProtocol().Connect(serverAddress,PORT);
+            var socket = this.CreateWSClientProtocol().Connect(serverAddress,PORT);
             Assert.IsTrue(socket.Connected, "Test is invalid because a connection could not be established.");
             socket.DisconnectAsync(()=>
             {
@@ -342,16 +315,17 @@ namespace JordanSdk.Network.Tcp.Tests
             Assert.IsFalse(socket.Connected, "The connection is still open.");
         }
 
-        [TestMethod(), TestCategory("TCPSocket (Receive)")]
+        [TestMethod(), TestCategory("Web Sockets (Receive)")]
         public void ReceiveTest()
         {
+
             Task.Run(async () => { await Task.Delay(20); ipv4ServerClient.Send(TestData.GetDummyStream().ToArray()); });
             byte[] buffer = ipv4Client.Receive();
             Assert.IsNotNull(buffer);
             Assert.IsTrue(buffer.Length > 0);
         }
 
-        [TestMethod(), TestCategory("TCPSocket (Receive)")]
+        [TestMethod(), TestCategory("Web Sockets (Receive)")]
         public async Task AsyncTaskReceiveTest()
         {
             var sentAsync = Task.Run(async () => { await Task.Delay(20); ipv4ServerClient.Send(TestData.GetDummyStream().ToArray()); });
@@ -360,13 +334,12 @@ namespace JordanSdk.Network.Tcp.Tests
             Assert.IsTrue(buffer.Length > 0);
         }
 
-        [TestMethod(), TestCategory("TCPSocket (Receive)")]
+        [TestMethod(), TestCategory("Web Sockets (Receive)")]
         public void AsyncCallbackReceiveTest()
         {
-            ManualResetEventSlim mevent = new ManualResetEventSlim(false);
             var sentAsync = Task.Run(async () => { await Task.Delay(20); ipv4ServerClient.Send(TestData.GetDummyStream().ToArray()); });
             byte[] received = null;
-            mevent.Reset();
+            ManualResetEventSlim mevent = new ManualResetEventSlim(false);
             ipv4Client.ReceiveAsync((buffer)=>
             {
                 received = buffer;
