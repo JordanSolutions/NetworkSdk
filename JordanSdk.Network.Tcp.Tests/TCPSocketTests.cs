@@ -8,6 +8,7 @@ using System.Threading.Tasks;
 using System.Net.Sockets;
 using JordanSdk.Network.Core;
 using System.Net;
+using System.Threading;
 
 namespace JordanSdk.Network.Tcp.Tests
 {
@@ -18,11 +19,11 @@ namespace JordanSdk.Network.Tcp.Tests
         static byte[] BIG_BUFFER_DATA;
         static byte[] HUGE_BUFFER_DATA;
 
-        System.Threading.ManualResetEvent mevent;
+       
         static TcpProtocol ipv4Server;
         static TcpProtocol ipv6Server;
-        static TcpSocket ipv4Client;
-        static TcpSocket ipv6Client;
+        static ISocket ipv4Client;
+        static ISocket ipv6Client;
 
         static ISocket ipv4ServerClient;
         static ISocket ipv6ServerClient;
@@ -36,8 +37,7 @@ namespace JordanSdk.Network.Tcp.Tests
         [TestInitialize]
         public void Initialize()
         {
-           
-            mevent = new System.Threading.ManualResetEvent(false);
+            ManualResetEventSlim mevent = new ManualResetEventSlim(false);
             ipv4Server = new TcpProtocol();
             ipv4Server.Port = PORT;
             ipv4Server.OnConnectionRequested += (socket) =>
@@ -58,10 +58,10 @@ namespace JordanSdk.Network.Tcp.Tests
             };
             ipv6Server.Listen();
             ipv4Client = this.CreateIPV4ClientProtocol().Connect(serverAddress,PORT);
-            mevent.WaitOne(1000);
+            mevent.Wait(1000);
             mevent.Reset();
             ipv6Client = this.CreateIPV6ClientProtocol().Connect(ipv6ServerAddress , PORT);
-            mevent.WaitOne(1000);
+            mevent.Wait(1000);
 
         }
 
@@ -166,6 +166,7 @@ namespace JordanSdk.Network.Tcp.Tests
         {
             try
             {
+                ManualResetEventSlim mevent = new ManualResetEventSlim(false);
                 NetworkBuffer buffer = TestData.GetDummyStream();
                 mevent.Reset();
                 int bytesSent = 0;
@@ -177,7 +178,7 @@ namespace JordanSdk.Network.Tcp.Tests
                     mevent.Set();
 
                 });
-                mevent.WaitOne();
+                mevent.Wait(10000);
                 Assert.AreEqual(buffer.Size, bytesSent, "Not all bytes were sent");
             }
             catch (Exception ex)
@@ -192,6 +193,7 @@ namespace JordanSdk.Network.Tcp.Tests
             try
             {
 
+                ManualResetEventSlim mevent = new ManualResetEventSlim(false);
                 NetworkBuffer buffer = TestData.GetLargeBuffer();
                 byte[] sentData = null;
                 int bytesSent = 0;
@@ -205,7 +207,7 @@ namespace JordanSdk.Network.Tcp.Tests
                         mevent.Set();
 
                     });
-                    mevent.WaitOne(1000);
+                    mevent.Wait(1000);
                 }
                 Assert.AreEqual(buffer.Size, bytesSent, "Not all bytes were sent");
             }
@@ -220,7 +222,7 @@ namespace JordanSdk.Network.Tcp.Tests
         {
             try
             {
-
+                ManualResetEventSlim mevent = new ManualResetEventSlim(false);
                 NetworkBuffer buffer = TestData.GetMidSizeBuffer();
                 byte[] sentData = null;
                 int bytesSent = 0;
@@ -234,7 +236,7 @@ namespace JordanSdk.Network.Tcp.Tests
                         mevent.Set();
 
                     });
-                    mevent.WaitOne(1000);
+                    mevent.Wait(1000);
                 }
                 Assert.AreEqual(buffer.Size, bytesSent, "Not all bytes were sent");
             }
@@ -328,6 +330,7 @@ namespace JordanSdk.Network.Tcp.Tests
         [TestMethod(), TestCategory("TCPSocket (Disconnect)")]
         public void AsyncCallbackDisconnectTest()
         {
+            ManualResetEventSlim mevent = new ManualResetEventSlim(false);
             mevent.Reset();
             var socket = this.CreateIPV4ClientProtocol().Connect(serverAddress,PORT);
             Assert.IsTrue(socket.Connected, "Test is invalid because a connection could not be established.");
@@ -335,14 +338,13 @@ namespace JordanSdk.Network.Tcp.Tests
             {
                 mevent.Set();
             });
-            mevent.WaitOne();
+            mevent.Wait(1000);
             Assert.IsFalse(socket.Connected, "The connection is still open.");
         }
 
         [TestMethod(), TestCategory("TCPSocket (Receive)")]
         public void ReceiveTest()
         {
-            mevent.Reset();
             Task.Run(async () => { await Task.Delay(20); ipv4ServerClient.Send(TestData.GetDummyStream().ToArray()); });
             byte[] buffer = ipv4Client.Receive();
             Assert.IsNotNull(buffer);
@@ -361,6 +363,7 @@ namespace JordanSdk.Network.Tcp.Tests
         [TestMethod(), TestCategory("TCPSocket (Receive)")]
         public void AsyncCallbackReceiveTest()
         {
+            ManualResetEventSlim mevent = new ManualResetEventSlim(false);
             var sentAsync = Task.Run(async () => { await Task.Delay(20); ipv4ServerClient.Send(TestData.GetDummyStream().ToArray()); });
             byte[] received = null;
             mevent.Reset();
@@ -369,7 +372,7 @@ namespace JordanSdk.Network.Tcp.Tests
                 received = buffer;
                 mevent.Set();
             });
-            mevent.WaitOne();
+            mevent.Wait(1000);
             Assert.IsNotNull(received);
             Assert.IsTrue(received.Length > 0);
         }

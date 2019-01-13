@@ -19,7 +19,7 @@ namespace JordanSdk.Network.WebSocket.Tests
         static byte[] HUGE_BUFFER_DATA;
 
         static WebSocketProtocol ipv4Server;
-        static WebSocket ipv4Client;
+        static ISocket ipv4Client;
 
         static ISocket ipv4ServerClient;
 
@@ -139,7 +139,7 @@ namespace JordanSdk.Network.WebSocket.Tests
         {
             try
             {
-                ManualResetEvent mevent = new ManualResetEvent(false);
+                ManualResetEventSlim mevent = new ManualResetEventSlim(false);
                 NetworkBuffer buffer = TestData.GetDummyStream();
                 int bytesSent = 0;
 
@@ -150,7 +150,7 @@ namespace JordanSdk.Network.WebSocket.Tests
                     mevent.Set();
 
                 });
-                mevent.WaitOne();
+                mevent.Wait(1000);
                 Assert.AreEqual(buffer.Size, bytesSent, "Not all bytes were sent");
             }
             catch (Exception ex)
@@ -168,8 +168,7 @@ namespace JordanSdk.Network.WebSocket.Tests
                 NetworkBuffer buffer = TestData.GetLargeBuffer();
                 byte[] sentData = null;
                 int bytesSent = 0;
-                ManualResetEvent mevent = new ManualResetEvent(false);
-
+                ManualResetEventSlim mevent = new ManualResetEventSlim(false);
                 while (null != (sentData = buffer.Read(WebSocketProtocol.BUFFER_SIZE)))
                 {
                     mevent.Reset();
@@ -180,7 +179,7 @@ namespace JordanSdk.Network.WebSocket.Tests
                         mevent.Set();
 
                     });
-                    mevent.WaitOne(1000);
+                    mevent.Wait(1000);
                 }
                 Assert.AreEqual(buffer.Size, bytesSent, "Not all bytes were sent");
             }
@@ -199,7 +198,7 @@ namespace JordanSdk.Network.WebSocket.Tests
                 NetworkBuffer buffer = TestData.GetMidSizeBuffer();
                 byte[] sentData = null;
                 int bytesSent = 0;
-                ManualResetEvent mevent = new ManualResetEvent(false);
+                ManualResetEventSlim mevent = new ManualResetEventSlim(false);
 
                 while ((sentData = buffer.Read(WebSocketProtocol.BUFFER_SIZE)) != null)
                 {
@@ -211,7 +210,7 @@ namespace JordanSdk.Network.WebSocket.Tests
                         mevent.Set();
 
                     });
-                    mevent.WaitOne(1000);
+                    mevent.Wait(1000);
                 }
                 Assert.AreEqual(buffer.Size, bytesSent, "Not all bytes were sent");
             }
@@ -305,14 +304,14 @@ namespace JordanSdk.Network.WebSocket.Tests
         [TestMethod(), TestCategory("Web Sockets (Disconnect)")]
         public void AsyncCallbackDisconnectTest()
         {
-            ManualResetEvent mevent = new ManualResetEvent(false);
+            ManualResetEventSlim mevent = new ManualResetEventSlim(false);
             var socket = this.CreateWSClientProtocol().Connect(serverAddress,PORT);
             Assert.IsTrue(socket.Connected, "Test is invalid because a connection could not be established.");
             socket.DisconnectAsync(()=>
             {
                 mevent.Set();
             });
-            mevent.WaitOne();
+            mevent.Wait(1000);
             Assert.IsFalse(socket.Connected, "The connection is still open.");
         }
 
@@ -340,13 +339,13 @@ namespace JordanSdk.Network.WebSocket.Tests
         {
             var sentAsync = Task.Run(async () => { await Task.Delay(20); ipv4ServerClient.Send(TestData.GetDummyStream().ToArray()); });
             byte[] received = null;
-            ManualResetEvent mevent = new ManualResetEvent(false);
+            ManualResetEventSlim mevent = new ManualResetEventSlim(false);
             ipv4Client.ReceiveAsync((buffer)=>
             {
                 received = buffer;
                 mevent.Set();
             });
-            mevent.WaitOne();
+            mevent.Wait(1000);
             Assert.IsNotNull(received);
             Assert.IsTrue(received.Length > 0);
         }

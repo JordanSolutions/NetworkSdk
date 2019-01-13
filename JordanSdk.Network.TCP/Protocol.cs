@@ -12,7 +12,7 @@ namespace JordanSdk.Network.Tcp
     /// <summary>
     /// This class is the TCP Implementation of IProtocol, and simplifies connection oriented network management for all possible operations such as listening, accepting incoming connections, and connecting as a client to a remote server.
     /// </summary>
-    public class TcpProtocol : IProtocol<TcpSocket>, IDisposable
+    public class TcpProtocol : IProtocol
     {
         #region Private Fields
 
@@ -63,7 +63,7 @@ namespace JordanSdk.Network.Tcp
         /// Use this property to specify the IP/Interface to bind to. Defaults to IPV4, Any IP address (0.0.0.0).
         /// Examples: IPV4 Local Host - '127.0.0.1', IPV6 Local Host - '::1'
         /// </summary>
-        public string Address { get; set; } = "0.0.0.0";
+        public string Address { get; set; } = "127.0.0.1";
 
         #endregion
 
@@ -136,7 +136,7 @@ namespace JordanSdk.Network.Tcp
         /// <param name="remotePort">Remote server IP port to connect to.</param>
         /// <param name="enableNatTraversal">Set to true to try and enable NAT traversal via configuring your router for port forwarding.</param>
         /// <returns>Returns an instance of TCP Socket</returns>
-        public async Task<TcpSocket> ConnectAsync(string remoteIp, int remotePort, bool enableNatTraversal = false)
+        public async Task<ISocket> ConnectAsync(string remoteIp, int remotePort, bool enableNatTraversal = false)
         {
             var task = new TaskCompletionSource<TcpSocket>();
             var endPoint = new IPEndPoint(IPAddress.Parse(remoteIp), remotePort);
@@ -161,7 +161,7 @@ namespace JordanSdk.Network.Tcp
         /// <param name="remotePort">Remote server IP port to connect to.</param>
         /// <param name="enableNatTraversal">Set to true to try and enable NAT traversal via configuring your router for port forwarding.</param>
         /// <returns>Returns an instance of TCP Socket</returns>
-        public void ConnectAsync(Action<TcpSocket> callback, string remoteIp, int remotePort, bool enableNatTraversal = false)
+        public void ConnectAsync(Action<ISocket> callback, string remoteIp, int remotePort, bool enableNatTraversal = false)
         {
             var remoteEndPoint = new IPEndPoint(IPAddress.Parse(remoteIp), remotePort);
             var socket = new Socket(remoteEndPoint.AddressFamily, SocketType.Stream, ProtocolType.Tcp);
@@ -183,7 +183,7 @@ namespace JordanSdk.Network.Tcp
         /// <param name="remotePort">Remote server IP port to connect to.</param>
         /// <param name="enableNatTraversal">Set to true to try and enable NAT traversal via configuring your router for port forwarding.</param>
         /// <returns>Returns an instance of TCP Socket if the connection succeeds.</returns>
-        public TcpSocket Connect(string remoteIp, int remotePort, bool enableNatTraversal = false)
+        public ISocket Connect(string remoteIp, int remotePort, bool enableNatTraversal = false)
         {
             var endPoint = new IPEndPoint(IPAddress.Parse(remoteIp), remotePort);
             var socket = new Socket(endPoint.AddressFamily, SocketType.Stream, ProtocolType.Tcp);

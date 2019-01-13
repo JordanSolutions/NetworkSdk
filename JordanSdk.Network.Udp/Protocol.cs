@@ -14,7 +14,7 @@ namespace JordanSdk.Network.Udp
     /// <summary>
     /// This class is the UDP implementation of IProtocol, simplifies UDP network management for all possible operations such as listening, accepting incoming connections, connecting as a client to a remote server and much more.
     /// </summary>
-    public class UdpProtocol : IProtocol<UdpSocket>, IDisposable
+    public class UdpProtocol : IProtocol
     {
 
         #region Private Fields
@@ -66,7 +66,7 @@ namespace JordanSdk.Network.Udp
         /// Use this property for specifying the local Interface to bind to either for server or client connections. Defaults to IPV4, Any IP address (0.0.0.0).
         /// Examples: IPV4 Local Host - '127.0.0.1', IPV6 Local Host - '::1'
         /// </summary>
-        public string Address { get; set; } = "0.0.0.0";
+        public string Address { get; set; } = "127.0.0.1";
 
         #endregion
 
@@ -149,7 +149,7 @@ namespace JordanSdk.Network.Udp
         /// <param name="remotePort">Remote server IP port to connect to.</param>
         /// <param name="enableNatTraversal">Set to true to try and enable NAT traversal via configuring your router for port forwarding.</param>
         /// <returns>Returns an instance of TCP Socket</returns>
-        public async Task<UdpSocket> ConnectAsync(string remoteIp, int remotePort, bool enableNatTraversal = false)
+        public async Task<ISocket> ConnectAsync(string remoteIp, int remotePort, bool enableNatTraversal = false)
         {
             var remoteEndPoint = new IPEndPoint(IPAddress.Parse(remoteIp), remotePort);
             _localEndpoint = new IPEndPoint(IPAddress.Parse(Address ?? (remoteEndPoint.AddressFamily == AddressFamily.InterNetwork ? "127.0.0.1" : "::1")), Port);
@@ -167,7 +167,7 @@ namespace JordanSdk.Network.Udp
         /// <param name="enableNatTraversal">Set to true to try and enable NAT traversal via configuring your router for port forwarding.</param>
         /// </summary>
         /// <returns>Returns an instance of TCP Socket</returns>
-        public void ConnectAsync(Action<UdpSocket> callback, string remoteIp, int remotePort, bool enableNatTraversal = false)
+        public void ConnectAsync(Action<ISocket> callback, string remoteIp, int remotePort, bool enableNatTraversal = false)
         {
             Task.Run(async () =>
             {
@@ -191,7 +191,7 @@ namespace JordanSdk.Network.Udp
         /// <param name="enableNatTraversal">Set to true to try and enable NAT traversal via configuring your router for port forwarding.</param>
         /// </summary>
         /// <returns>Returns an instance of TCP Socket</returns>
-        public UdpSocket Connect(string remoteIp, int remotePort, bool enableNatTraversal = false)
+        public ISocket Connect(string remoteIp, int remotePort, bool enableNatTraversal = false)
         {
             var remoteEndPoint = new IPEndPoint(IPAddress.Parse(remoteIp), remotePort);
             _localEndpoint = new IPEndPoint(IPAddress.Parse(string.IsNullOrWhiteSpace(Address) ? (remoteEndPoint.AddressFamily == AddressFamily.InterNetwork ? "127.0.0.1" : "::1") : Address), Port);
@@ -277,6 +277,16 @@ namespace JordanSdk.Network.Udp
                     succeed = CollectSocket(senderIp as IPEndPoint, out client);
                 else
                     Diagnostic.DiagnosticCenter.Instance.Log?.LogException(new ArgumentException(succeed ? "Unable to setup the client connection request." : "UDP Connection request should be one byte long"));
+            }catch(System.Net.Sockets.SocketException ex)
+            {
+                /*
+                 * Ignoring 10040, this exception happens often when client and server are on the same machine using the same IP address and port and this loop 
+                 * receives data larger than the initial expected connection buffer size.
+                 * Also any incoming UDP package that is larger than the connection expected size will be ignored and discarded.
+                 */
+                if (ex.ErrorCode != 10040)
+                    Diagnostic.DiagnosticCenter.Instance.Log?.LogException(ex);
+
             }
             catch (ObjectDisposedException)
             {
@@ -294,7 +304,7 @@ namespace JordanSdk.Network.Udp
             if (succeed)
                 OnConnectionRequested?.Invoke(client);
             else
-                Diagnostic.DiagnosticCenter.Instance.Log?.LogException(new ArgumentException(succeed ? "Unable to setup the client connection request." : "UDP Connection request should be one byte long"));
+                Diagnostic.DiagnosticCenter.Instance.Log?.LogException(new Exception(succeed ? "Unable to setup the client connection request." : "UDP Connection request should be one byte long"));
         }
 
 

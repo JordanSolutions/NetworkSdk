@@ -11,7 +11,7 @@ namespace JordanSdk.Network.WebSocket
     /// <summary>
     /// This class is a web sockets implementation of the iProtocol .
     /// </summary>
-    public class WebSocketProtocol : IProtocol<WebSocket>, IDisposable
+    public class WebSocketProtocol : IProtocol
     {
         #region Private Fields
 
@@ -125,7 +125,7 @@ namespace JordanSdk.Network.WebSocket
         /// <param name="remotePort">Remote server IP port to connect to.</param>
         /// <param name="enableNatTraversal">Set to true to try and enable NAT traversal via configuring your router for port forwarding.</param>
         /// <returns>Returns an instance of the created client ISocket if the connection was established, null otherwise.</returns>
-        public WebSocket Connect(string remoteIp, int remotePort, bool enableNatTraversal = false)
+        public ISocket Connect(string remoteIp, int remotePort, bool enableNatTraversal = false)
         {
             if (enableNatTraversal)
                 StartNatPortMapping();
@@ -141,7 +141,7 @@ namespace JordanSdk.Network.WebSocket
         /// <param name="remotePort">Remote server IP port to connect to.</param>
         /// <param name="enableNatTraversal">Set to true to try and enable NAT traversal via configuring your router for port forwarding.</param>
         /// <returns>Returns an instance of the created client ISocket if the connection was established, null otherwise.</returns>
-        public async Task<WebSocket> ConnectAsync(string remoteIp, int remotePort, bool enableNatTraversal = false)
+        public async Task<ISocket> ConnectAsync(string remoteIp, int remotePort, bool enableNatTraversal = false)
         {
            
             if (enableNatTraversal)
@@ -158,7 +158,7 @@ namespace JordanSdk.Network.WebSocket
         /// <param name="remotePort">Remote server IP port to connect to.</param>
         /// <param name="enableNatTraversal">Set to true to try and enable NAT traversal via configuring your router for port forwarding.</param>
         /// <returns>Returns an instance of the created client ISocket</returns>
-        public void ConnectAsync(Action<WebSocket> callback, string remoteIp, int remotePort, bool enableNatTraversal = false)
+        public void ConnectAsync(Action<ISocket> callback, string remoteIp, int remotePort, bool enableNatTraversal = false)
         {
             Task.Run(async () =>
             {
