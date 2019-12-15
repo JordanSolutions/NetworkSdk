@@ -38,8 +38,13 @@ namespace JordanSdk.Network.Udp.Tests
             }).Select(p => p.ToString());
             ipv6ServerAddress = selectediPV6.First();
             serverAddress = selected.First();
-            clientAddress = selected.Skip(1).First();
-
+            if(selected.Count() < 2)
+            {
+                clientAddress = serverAddress;
+            }
+            else { 
+                clientAddress = selected.Skip(1).First();
+            }
         }
 
         [TestInitialize]

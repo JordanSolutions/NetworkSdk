@@ -1,6 +1,6 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
-    <TargetFrameworks>netstandard2.0;net45;net451;net452;net46;net461;net462;net47;net471</TargetFrameworks>
+    <TargetFrameworks>netstandard2.0;net45;net451;net452;net46;net461;net462;net47;net471;net48</TargetFrameworks>
     <PackageId>JordanSdk.Network.Core</PackageId>
     <Authors>Erik Jordan</Authors>
     <Product>Jordan SDK Core Networking Library</Product>
@@ -13,6 +13,7 @@
     <ApplicationIcon />
     <OutputType>Library</OutputType>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <AutoGenerateBindingRedirects>true</AutoGenerateBindingRedirects>
   </PropertyGroup>
   <ItemGroup Condition="'$(TargetFramework)'!='netstandard2.0'">
     <Reference Include="System" />

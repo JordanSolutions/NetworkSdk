@@ -90,11 +90,21 @@ namespace JordanSdk.Network.Udp.Tests
         public static void ClassInitialized(TestContext context)
         {
             //Based on multiple IP addresses configured in the network adapter.
-            var selected = Dns.GetHostEntry(Dns.GetHostName()).AddressList.Where(p => {
+            var hostEntries = Dns.GetHostEntry(Dns.GetHostName());
+            var selected = hostEntries.AddressList.Where(p => {
                 return p.AddressFamily == AddressFamily.InterNetwork;
             }).Select(p=> p.ToString());
             serverAddress = selected.First();
-            clientAddress = selected.Skip(1).First();
+            if (selected.Count() < 2)
+            {
+                //If we don't have multiple IP addresses lets try re-using the same IP
+                //Not good for client/server testing at all, is a bad idea to fall in here
+                clientAddress = serverAddress;
+            }
+            else
+            {
+                clientAddress = selected.Skip(1).First();
+            }
             
         }
 

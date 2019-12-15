@@ -1,6 +1,6 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
-    <TargetFrameworks>netstandard2.0;net45;net451;net452;net46;net461;net462;net47;net471</TargetFrameworks>
+    <TargetFrameworks>netstandard2.0;net45;net451;net452;net46;net461;net462;net47;net471;net48</TargetFrameworks>
     <PackageId>JordanSDK.Network.Tcp</PackageId>
     <Authors>Erik Jordan</Authors>
     <Product>Jordan SDK TCP Protocol Library</Product>
@@ -13,6 +13,7 @@
     <ApplicationIcon />
     <OutputType>Library</OutputType>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <AutoGenerateBindingRedirects>true</AutoGenerateBindingRedirects>
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="..\JordanSdk.Diagnostic\JordanSdk.Diagnostic.csproj" />
