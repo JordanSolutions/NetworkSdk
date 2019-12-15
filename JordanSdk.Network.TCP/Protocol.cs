@@ -345,7 +345,7 @@ namespace JordanSdk.Network.Tcp
                 asyncState.Socket.EndConnect(ar);
                 asyncState.Callback?.Invoke(SetupClientToken(asyncState.Socket));
             }
-            catch (Exception ex)
+            catch (Exception)
             {
                 asyncState.Callback?.Invoke(null);
             }
@@ -357,6 +357,10 @@ namespace JordanSdk.Network.Tcp
 
         private bool disposedValue = false; // To detect redundant calls
 
+        /// <summary>
+        /// Use this method to free managed resources
+        /// </summary>
+        /// <param name="disposing"></param>
         protected virtual void Dispose(bool disposing)
         {
             if (!disposedValue)
@@ -370,6 +374,9 @@ namespace JordanSdk.Network.Tcp
             }
         }
 
+        /// <summary>
+        /// Destructor 
+        /// </summary>
         ~TcpProtocol()
         {
             Dispose(false);
